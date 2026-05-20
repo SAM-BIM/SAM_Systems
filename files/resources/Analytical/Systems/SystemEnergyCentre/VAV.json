@@ -1,4 +1,4 @@
-[
+﻿[
   {
     "_type": "SAM.Core.Systems.SystemEnergyCentre,SAM.Core.Systems",
     "ParameterSets": [
@@ -45,7 +45,10 @@
                   "_type": "SAM.Analytical.Systems.FluidType,SAM.Analytical.Systems",
                   "Name": "Water",
                   "Guid": "a89ff5c8-2d4d-400e-a27a-9de5f2927653",
-                  "Description": ""
+                  "Description": "",
+                  "SpecificHeatCapacity": 4184,
+                  "Density": 1000,
+                  "FreezingPoint": 0
                 }
               ],
               "DesignConditions": [
