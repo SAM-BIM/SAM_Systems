@@ -121,7 +121,25 @@ namespace SAM.Analytical.Systems.Mollier
 
                 if (previous != null)
                 {
-                    systemPlantRoom.Connect(previous, current, out _, airSystem);
+                    // Air flows previous.Out -> current.In. Resolve those connectors explicitly: auto-selection
+                    // (-1) takes each component's first unconnected connector, and because air components define
+                    // their In connector before Out it would wire previous.In -> current.Out, leaving the
+                    // upstream Out connector free so Direction.Out ordering (GetOrderedSystemComponents) and the
+                    // export/conversion paths cannot follow the generated chain. Picking the first UNCONNECTED
+                    // Out/In also routes the shared twin-wheel exchanger's second air path onto its second
+                    // connector pair instead of colliding with the first. If a directional connector cannot be
+                    // resolved, fall back to auto-selection rather than skip the link.
+                    SystemType systemType = new SystemType(airSystem);
+                    int index_Out = UnconnectedIndex(systemPlantRoom, previous, systemType, SAM.Core.Direction.Out);
+                    int index_In = UnconnectedIndex(systemPlantRoom, current, systemType, SAM.Core.Direction.In);
+                    if (index_Out != -1 && index_In != -1)
+                    {
+                        systemPlantRoom.Connect(previous, current, out _, airSystem, index_Out, index_In);
+                    }
+                    else
+                    {
+                        systemPlantRoom.Connect(previous, current, out _, airSystem);
+                    }
                 }
                 else
                 {
@@ -138,6 +156,16 @@ namespace SAM.Analytical.Systems.Mollier
             }
 
             return count;
+        }
+
+        /// <summary>
+        /// Returns the first currently-unconnected connector index of the given <paramref name="direction"/> for
+        /// the air <paramref name="systemType"/> on <paramref name="systemComponent"/>, or -1 if there is none.
+        /// </summary>
+        private static int UnconnectedIndex(SystemPlantRoom systemPlantRoom, ISystemComponent systemComponent, SystemType systemType, SAM.Core.Direction direction)
+        {
+            List<int> indexes = systemPlantRoom?.Indexes(systemComponent, systemType, ConnectorStatus.Unconnected, direction);
+            return indexes != null && indexes.Count > 0 ? indexes[0] : -1;
         }
 
         /// <summary>

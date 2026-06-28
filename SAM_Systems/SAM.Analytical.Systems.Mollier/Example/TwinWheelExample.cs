@@ -139,6 +139,36 @@ namespace SAM.Analytical.Systems.Mollier
                 Check(ref result, messages, !double.IsNaN(latentEfficiency) && latentEfficiency >= 0 && latentEfficiency <= 1, $"Latent recovery effectiveness within [0,1] (got {latentEfficiency:0.###})");
             }
 
+            // The chain must be followable in the airflow (Out) direction: components have to be wired
+            // previous.Out -> current.In, not In -> Out. GetOrderedSystemComponents excludes the start, so the
+            // supply chain (HR -> cooling -> reheat -> fan) walks 3 downstream hops in the Out direction; the
+            // In<->Out wiring bug would leave each component's Out connector free and cap every walk at a single
+            // component (0 downstream hops).
+            SystemPlantRoom plantRoom = systemPlantRooms?.FirstOrDefault();
+            int maxOrdered = 0;
+            if (plantRoom != null)
+            {
+                foreach (ISystem airSystem in plantRoom.GetSystems() ?? new List<ISystem>())
+                {
+                    List<ISystemComponent> systemComponents = plantRoom.GetSystemComponents<ISystemComponent>(airSystem);
+                    if (systemComponents == null)
+                    {
+                        continue;
+                    }
+
+                    foreach (ISystemComponent systemComponent in systemComponents)
+                    {
+                        List<ISystemComponent> ordered = plantRoom.GetOrderedSystemComponents(systemComponent, airSystem, SAM.Core.Direction.Out);
+                        if (ordered != null && ordered.Count > maxOrdered)
+                        {
+                            maxOrdered = ordered.Count;
+                        }
+                    }
+                }
+            }
+            // Supply chain = 4 components in flow order, so the head's Out-walk reaches the other 3.
+            Check(ref result, messages, maxOrdered >= 3, $"Chain followable in airflow (Out) direction (longest Out-walk reached {maxOrdered} downstream components)");
+
             return result;
         }
 
