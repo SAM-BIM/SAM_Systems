@@ -62,7 +62,7 @@ namespace SAM.Analytical.Systems.Mollier
         {
             MollierProcesses(out List<IMollierProcess> supplyMollierProcesses, out List<IMollierProcess> extractMollierProcesses);
 
-            return Create.SystemEnergyCentre(supplyMollierProcesses, extractMollierProcesses, supplyAirflow, extractAirflow, "Twin-Wheel AHU");
+            return SAM.Analytical.Systems.Mollier.Create.SystemEnergyCentre(supplyMollierProcesses, extractMollierProcesses, supplyAirflow, extractAirflow, "Twin-Wheel AHU");
         }
 
         /// <summary>
