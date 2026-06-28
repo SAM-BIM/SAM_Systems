@@ -41,7 +41,7 @@ namespace SAM.Analytical.Systems.Mollier
             MollierPoint room = SAM.Core.Mollier.Create.MollierPoint_ByRelativeHumidity(24, 50, Pressure);
 
             // Supply chain: heat recovery -> cooling -> reheat -> supply fan.
-            HeatRecoveryProcess supplyHeatRecovery = outdoor.HeatRecoveryProcess(room, 0.75, 0.65); // sensible 0.75, latent 0.65
+            HeatRecoveryProcess supplyHeatRecovery = outdoor.HeatRecoveryProcess_Supply(room, 75, 65); // sensible 75%, latent 65%
             CoolingProcess cooling = supplyHeatRecovery.End.CoolingProcess(13, 0.85);               // off-coil 13 C, efficiency 0.85
             HeatingProcess reheat = cooling.End.HeatingProcess(16);                                 // reheat to 16 C
             FanProcess supplyFan = reheat.End.FanProcess(0.8);                                      // specific fan temperature rise
@@ -49,7 +49,7 @@ namespace SAM.Analytical.Systems.Mollier
             supplyMollierProcesses = new List<IMollierProcess> { supplyHeatRecovery, cooling, reheat, supplyFan };
 
             // Extract chain: same wheel (exhaust side) -> extract fan.
-            HeatRecoveryProcess extractHeatRecovery = room.HeatRecoveryProcess(outdoor, 0.75, 0.65, true);
+            HeatRecoveryProcess extractHeatRecovery = room.HeatRecoveryProcess_Extract(outdoor, 75, 65);
             FanProcess extractFan = extractHeatRecovery.End.FanProcess(0.8);
 
             extractMollierProcesses = new List<IMollierProcess> { extractHeatRecovery, extractFan };
