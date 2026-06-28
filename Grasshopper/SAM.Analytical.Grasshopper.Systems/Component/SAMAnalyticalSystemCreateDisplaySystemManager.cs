@@ -33,7 +33,11 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// </summary>
         public SAMAnalyticalSystemCreateDisplaySystemManager()
           : base("SAMAnalytical.CreateDisplaySystemManager", "SAMAnalytical.CreateDisplaySystemManager",
-              "Create DisplaySystemManager",
+              "Builds a DisplaySystemManager that maps each air-handling component type to the geometry symbol\n" +
+              "used to draw it on the schematic.\n" +
+              "\n" +
+              "Supply a list of geometry symbols and a matching list of component types (paired by position);\n" +
+              "the resulting manager tells the schematic which symbol represents each component type.",
               "SAM", "Systems")
         {
         }
@@ -46,11 +50,11 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "_systemGeometrySymbols", NickName = "_systemGeometrySymbols", Description = "SystemGeometrySymbols", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "_systemGeometrySymbols", NickName = "_systemGeometrySymbols", Description = "The geometry symbols to use for the components, one per component type (paired by list position with _analyticalSystemComponentTypes).", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
 
                 global::Grasshopper.Kernel.Parameters.Param_String param_String = null;
 
-                param_String = new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_analyticalSystemComponentTypes", NickName = "_analyticalSystemComponentTypes", Description = "AnalyticalSystemComponentTypes", Access = GH_ParamAccess.list };
+                param_String = new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_analyticalSystemComponentTypes", NickName = "_analyticalSystemComponentTypes", Description = "The component types each symbol represents (paired by list position with _systemGeometrySymbols). Use the SAM.AnalyticalSystemComponentType picker.", Access = GH_ParamAccess.list };
 
                 result.Add(new GH_SAMParam(param_String, ParamVisibility.Binding));
                 return result.ToArray();
@@ -65,7 +69,7 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "displaySystemManager", NickName = "displaySystemManager", Description = "DisplaySystemManager", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "displaySystemManager", NickName = "displaySystemManager", Description = "The DisplaySystemManager mapping component types to their drawing symbols.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
                 return result.ToArray();
             }
         }

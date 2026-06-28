@@ -32,7 +32,9 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// </summary>
         public SAMAnalyticalSystemCreateDisplaySystemConnectorManager()
           : base("SAMAnalytical.CreateDisplaySystemConnectorManager", "SAMAnalytical.CreateDisplaySystemConnectorManager",
-              "Creates DisplaySystemConnectorManager",
+              "Groups a set of display system connectors into a single DisplaySystemConnectorManager.\n" +
+              "\n" +
+              "The manager bundles all the ports of a component for display and connection on the schematic.",
               "SAM", "Systems")
         {
         }
@@ -45,7 +47,7 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "_displaySystemConnectors", NickName = "_displaySystemConnectors", Description = "SAM Systems DisplaySystemConnectors", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "_displaySystemConnectors", NickName = "_displaySystemConnectors", Description = "The display system connectors (ports) to bundle into one manager, e.g. from SAMAnalytical.SystemConnector.", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
                 return result.ToArray();
             }
         }
@@ -58,7 +60,7 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "displaySystemConnectorManager", NickName = "displaySystemConnectorManager", Description = "DisplaySystemConnectorManager", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "displaySystemConnectorManager", NickName = "displaySystemConnectorManager", Description = "The DisplaySystemConnectorManager bundling the supplied connectors.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
                 return result.ToArray();
             }
         }
