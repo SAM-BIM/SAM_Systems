@@ -27,7 +27,10 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// </summary>
         public SAMAnalyticalSystemType()
           : base("SAM.AnalyticalSystemType", "SAM.AnalyticalSystemType",
-              "AnalyticalSystemType",
+              "Selects an analytical system type (e.g. AirSystem, LiquidSystem, ElectricalSystem) from a\n" +
+              "drop-down list.\n" +
+              "\n" +
+              "Use it to tell connectivity components which network to operate on, or to type a system connector.",
               "SAM", "Systems")
         {
         }

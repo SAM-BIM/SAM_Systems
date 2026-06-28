@@ -38,7 +38,13 @@ namespace SAM.Analytical.Grasshopper.Systems
           : base(
                   "SAMAnalytical.CreateSystemEnergyCentreByMechanicalSystems",
                   "SAMAnalytical.CreateSystemEnergyCentreByMechanicalSystems",
-                  "",
+                  "Creates a SystemEnergyCentre from the mechanical (ventilation) systems defined on a SAM AnalyticalModel.\n" +
+                  "\n" +
+                  "For each distinct ventilation system referenced by the model's spaces, a matching plantroom is\n" +
+                  "built from the system templates and its spaces are assigned to it. The energy centre is returned\n" +
+                  "and also stored on the analytical model.\n" +
+                  "\n" +
+                  "To run a simulation, connect the SystemEnergyCentre to SAMSystems.CreateTPDByTSDAndSystemEnergyCentre.",
                   "SAM",
                   "Systems")
         {
@@ -53,8 +59,8 @@ namespace SAM.Analytical.Grasshopper.Systems
             {
                 List<GH_SAMParam> result =
                 [
-                    new GH_SAMParam(new GooAnalyticalModelParam() { Name = "_analyticalModel", NickName = "_analyticalModel", Description = "SAM AnalyticalModel", Access = GH_ParamAccess.item }, ParamVisibility.Binding),
-                    new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "_systemEnergyCentre", NickName = "_systemEnergyCentre", Description = "SAM SystemEnergyCentre", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary),
+                    new GH_SAMParam(new GooAnalyticalModelParam() { Name = "_analyticalModel", NickName = "_analyticalModel", Description = "The SAM AnalyticalModel whose ventilation systems and spaces drive the energy centre. A copy is returned with the energy centre stored on it.", Access = GH_ParamAccess.item }, ParamVisibility.Binding),
+                    new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "_systemEnergyCentre", NickName = "_systemEnergyCentre", Description = "An existing SystemEnergyCentre to extend / use as the template source.\n\nOptional: if omitted, the default system templates are used.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary),
                 ];
                 return [.. result];
             }
@@ -69,7 +75,7 @@ namespace SAM.Analytical.Grasshopper.Systems
             {
                 List<GH_SAMParam> result =
                 [
-                    new GH_SAMParam(new GooAnalyticalModelParam() { Name = "analyticalModel", NickName = "analyticalModel", Description = "SAM AnalyticalModel", Access = GH_ParamAccess.item }, ParamVisibility.Binding),
+                    new GH_SAMParam(new GooAnalyticalModelParam() { Name = "analyticalModel", NickName = "analyticalModel", Description = "The SAM AnalyticalModel with the generated SystemEnergyCentre stored on it.", Access = GH_ParamAccess.item }, ParamVisibility.Binding),
                     new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "systemEnergyCentre", NickName = "systemEnergyCentre", Description = "SAM SystemEnergyCentre \n to simulate connect the SAMSystems.CreateTPDByTSDAndSystemEnergyCentre component.", Access = GH_ParamAccess.item }, ParamVisibility.Binding),
                 ];
                 return [.. result];

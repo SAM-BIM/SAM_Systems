@@ -31,7 +31,10 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// </summary>
         public SAMAnalyticalSystemResultValueByHourOfYear()
           : base("SAMAnalytical.SystemResultValueByHourOfYear", "SAMAnalytical.SystemResultValueByHourOfYear",
-              "System Result Value By Hour Of Year Index",
+              "Reads a single value from an indexed system result at a given hour of the year.\n" +
+              "\n" +
+              "System results store one value per hour (0-8759). Supply the result and an hour index to read the\n" +
+              "value for that hour, e.g. a coil load or temperature at a specific time step.",
               "SAM", "Systems")
         {
         }
@@ -44,7 +47,7 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooIndexedObjectsParam() { Name = "_result", NickName = "_result", Description = "Result (Indexed Doubles)", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooIndexedObjectsParam() { Name = "_result", NickName = "_result", Description = "An indexed (hourly) system result - a series of doubles, one per hour of the year.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
 
                 global::Grasshopper.Kernel.Parameters.Param_Integer integer = null;
 
@@ -63,7 +66,7 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Number() { Name = "value", NickName = "value", Description = "Value", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Number() { Name = "value", NickName = "value", Description = "The result value at the requested hour of the year.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
                 return result.ToArray();
             }
         }
