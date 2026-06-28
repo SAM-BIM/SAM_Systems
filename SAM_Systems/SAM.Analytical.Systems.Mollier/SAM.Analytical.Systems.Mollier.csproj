@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AssemblyTitle>SAM.Analytical.Systems.Mollier</AssemblyTitle>
+    <Product>SAM.Analytical.Systems.Mollier</Product>
+    <Copyright>Copyright (c) 2020-2026 Michal Dengusiak &amp; Jakub Ziolkowski and contributors</Copyright>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <OutputPath>..\..\build\</OutputPath>
+    <DocumentationFile>..\..\build\SAM.Analytical.Systems.Mollier.xml</DocumentationFile>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <OutputPath>..\..\build\</OutputPath>
+  </PropertyGroup>
+  <!--
+    Cross-repo bridge: this assembly couples SAM_Systems and SAM_Mollier without
+    introducing a circular reference. SAM.*.Mollier are consumed as built DLLs from
+    the sibling SAM_Mollier repo, so build SAM (base) and SAM_Mollier before SAM_Systems.
+  -->
+  <ItemGroup>
+    <Reference Include="SAM.Analytical">
+      <HintPath>..\..\..\SAM\build\SAM.Analytical.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Core">
+      <HintPath>..\..\..\SAM\build\SAM.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Geometry">
+      <HintPath>..\..\..\SAM\build\SAM.Geometry.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Math">
+      <HintPath>..\..\..\SAM\build\SAM.Math.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Weather">
+      <HintPath>..\..\..\SAM\build\SAM.Weather.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Core.Mollier">
+      <HintPath>..\..\..\SAM_Mollier\build\SAM.Core.Mollier.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Analytical.Mollier">
+      <HintPath>..\..\..\SAM_Mollier\build\SAM.Analytical.Mollier.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SAM.Core.Systems\SAM.Core.Systems.csproj" />
+    <ProjectReference Include="..\SAM.Analytical.Systems\SAM.Analytical.Systems.csproj" />
+    <ProjectReference Include="..\SAM.Geometry.Systems\SAM.Geometry.Systems.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+</Project>
