@@ -174,6 +174,10 @@ path 1, extract on air path 2); the humidity-ratio shift flags it as latent-capa
 - ✅ Supply + extract overload sharing one heat-recovery exchanger across both air
   paths (twin-wheel), exposed via optional GH inputs. Pairing is order-based — review
   if a chain has multiple heat-recovery devices.
+- ✅ Worked example + framework-free self-check `TwinWheelExample` (in the bridge
+  assembly) and a `SAMSystems.MollierTwinWheelExample` GH node that builds the example
+  and reports PASS/FAIL checks (component creation, single plant room, JSON round-trip,
+  cooling duty and bypass factor).
 - ⏳ CESBP-2025 twin-wheel validation against a manually authored Tas model — paper
   deliverable; Tas export lives in the separate `SAM_Tas` repo.
 - ⚠️ Not yet compiled: this container has no .NET toolchain and no base `SAM` /
