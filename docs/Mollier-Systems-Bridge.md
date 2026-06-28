@@ -74,10 +74,23 @@ SAM_Systems/SAM.Analytical.Systems.Mollier/
   Create/SystemPlantRoom.cs               # ordered chain → connected plant room
   Create/SystemEnergyCentre.cs            # plant room → energy centre (top-level entry)
   Create/SystemEnergyCentreByResult.cs    # overload sourcing design airflow from AirHandlingUnitResult
+  Create/SupplyExtract.cs                 # supply + extract chains; shared twin-wheel exchanger
 
 Grasshopper/SAM.Analytical.Grasshopper.Systems/
   Component/SAMSystemsCreateEnergyCentreByMollier.cs   # GH node: Mollier processes → SystemEnergyCentre
 ```
+
+### Twin-wheel (supply + extract)
+
+`Create.SystemPlantRoom(supply, extract, supplyAirflow, extractAirflow)` wires the
+supply chain onto a supply `AirSystem` and the extract chain onto an extract
+`AirSystem`. A `SystemExchanger` exposes two air paths (connection indexes 1 and 2);
+because `SystemPlantRoom.Connect` auto-selects the first *unconnected* connector pair,
+the supply chain consumes air path 1 and the extract chain then consumes air path 2 of
+the **same** exchanger instance. Heat-recovery devices are reused across the two chains
+paired in order, so a latent + sensible twin-wheel is modelled as one device rather than
+two. The Grasshopper node exposes optional `_extractMollierProcesses_` / `_extractAirflow_`
+inputs for this case.
 
 ## Usage
 
@@ -99,6 +112,9 @@ SystemEnergyCentre energyCentre = Create.SystemEnergyCentre(mollierGroup, design
   output: `SystemEnergyCentre`). The GH project now references `SAM.Core.Mollier` and
   `SAM.Geometry.Grasshopper.Mollier` (for `GooMollierProcessParam`) from the SAM_Mollier build.
 - ✅ Overload sourcing `designAirflow` from `AirHandlingUnitResult.SupplyAirFlow`.
+- ✅ Supply + extract overload sharing one heat-recovery exchanger across both air
+  paths (twin-wheel), exposed via optional GH inputs. Pairing is order-based — review
+  if a chain has multiple heat-recovery devices.
 - ⏳ CESBP-2025 twin-wheel validation against a manually authored Tas model — paper
   deliverable; Tas export lives in the separate `SAM_Tas` repo.
 - ⚠️ Not yet compiled: this container has no .NET toolchain and no base `SAM` /
