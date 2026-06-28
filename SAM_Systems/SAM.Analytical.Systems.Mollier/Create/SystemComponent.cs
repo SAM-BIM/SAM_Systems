@@ -67,6 +67,14 @@ namespace SAM.Analytical.Systems.Mollier
                     systemCoolingCoil.Setpoint = end.DryBulbTemperature;
                 }
 
+                // The air cannot leave the coil colder than the coil surface (~the Apparatus Dew Point),
+                // so the ADP dry-bulb temperature is a physical floor on the off-coil temperature.
+                MollierPoint apparatusDewPoint = coolingProcess.ApparatusDewPoint();
+                if (apparatusDewPoint != null && apparatusDewPoint.IsValid())
+                {
+                    systemCoolingCoil.MinimumOffcoil = apparatusDewPoint.DryBulbTemperature;
+                }
+
                 double bypassFactor = coolingProcess.BypassFactor();
                 if (!double.IsNaN(bypassFactor))
                 {

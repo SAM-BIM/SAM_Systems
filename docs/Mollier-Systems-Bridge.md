@@ -34,7 +34,7 @@ built DLLs from the sibling `SAM_Mollier` repo.
 |----------------------------|-----------------------|----------------|
 | `FanProcess`               | `SystemFan`           | — (duty implied by pressure/efficiency) |
 | `HeatingProcess`           | `SystemHeatingCoil`   | `Setpoint` = End dry-bulb; `Duty` = m·Δh |
-| `CoolingProcess`           | `SystemCoolingCoil`   | `Setpoint` = End dry-bulb; `BypassFactor` from Efficiency/ADP; `Duty` = m·Δh |
+| `CoolingProcess`           | `SystemCoolingCoil`   | `Setpoint` = End dry-bulb; `BypassFactor` from Efficiency/ADP; `MinimumOffcoil` = ADP dry-bulb; `Duty` = m·Δh |
 | `HeatRecoveryProcess`      | `SystemExchanger`     | `Setpoint` = End dry-bulb; latent flagged when humidity ratio shifts (twin-wheel) |
 | `HumidificationProcess`    | `SystemHumidifier`    | — |
 | `MixingProcess`            | `SystemAirJunction`   | — |
