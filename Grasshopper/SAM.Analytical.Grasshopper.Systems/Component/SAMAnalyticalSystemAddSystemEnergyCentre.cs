@@ -32,7 +32,11 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// </summary>
         public SAMAnalyticalSystemAddSystemEnergyCentre()
           : base("SAMAnalytical.AddSystemEnergyCentre", "SAMAnalytical.AddSystemEnergyCentre",
-              "Adds SystemEnergyCentre",
+              "Attaches a SystemEnergyCentre to a SAM AnalyticalModel.\n" +
+              "\n" +
+              "The energy centre (the building's air systems and plantrooms) is stored on the analytical\n" +
+              "model so it travels with the model through later steps and into simulation. The updated\n" +
+              "analytical model is returned together with the energy centre that was attached.",
               "SAM", "Systems")
         {
         }
@@ -45,8 +49,8 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooAnalyticalModelParam() { Name = "_analyticalModel", NickName = "_analyticalModel", Description = "SAM AnalyticalModel", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "_systemEnergyCentre_", NickName = "systemEnergyCentre", Description = "SAM SystemEnergyCentre", Optional = true, Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooAnalyticalModelParam() { Name = "_analyticalModel", NickName = "_analyticalModel", Description = "The SAM AnalyticalModel to attach the energy centre to. A copy is returned with the energy centre stored on it.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "_systemEnergyCentre_", NickName = "systemEnergyCentre", Description = "The SAM SystemEnergyCentre (air systems + plantrooms) to store on the analytical model.\n\nOptional: if omitted, any energy centre already present on the model is kept.", Optional = true, Access = GH_ParamAccess.item }, ParamVisibility.Binding));
                 return result.ToArray();
             }
         }
@@ -59,8 +63,8 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooAnalyticalModelParam() { Name = "analyticalModel", NickName = "analyticalModel", Description = "SAM AnalyticalModel", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "systemEnergyCentre", NickName = "systemEnergyCentre", Description = "SAM SystemEnergyCentre", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooAnalyticalModelParam() { Name = "analyticalModel", NickName = "analyticalModel", Description = "The SAM AnalyticalModel with the SystemEnergyCentre stored on it.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "systemEnergyCentre", NickName = "systemEnergyCentre", Description = "The SystemEnergyCentre that was attached to the analytical model.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
                 return result.ToArray();
             }
         }
