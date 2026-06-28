@@ -35,15 +35,34 @@ namespace SAM.Analytical.Grasshopper.Systems
           : base(
                 "SAMSystems.CreateEnergyCentreByMollier",
                 "SAMSystems.CreateEnergyCentreByMollier",
-                "Creates a SystemEnergyCentre from an ordered chain of Mollier (psychrometric) processes.\n" +
+                "Converts a sequence of psychrometric (Mollier) processes into a connected, simulation-ready\n" +
+                "SystemEnergyCentre - turning an air-handling concept sketched on the Mollier chart into a\n" +
+                "model that can be simulated.\n" +
                 "\n" +
-                "Each Mollier process is mapped to the matching air-handling component (cooling coil,\n" +
-                "heating coil, fan, heat-recovery exchanger, humidifier, mixing junction); duties, off-coil\n" +
-                "setpoints and cooling bypass factors are derived from the process end-states and the\n" +
-                "supplied design airflow, and the components are wired sequentially into a plantroom.\n" +
+                "HOW IT WORKS\n" +
+                "Each Mollier process in the supplied chain is classified by type and mapped to the matching\n" +
+                "air-handling component:\n" +
+                "  - CoolingProcess        -> SystemCoolingCoil (off-coil Setpoint + BypassFactor + Duty)\n" +
+                "  - HeatingProcess        -> SystemHeatingCoil (off-coil Setpoint + Duty)\n" +
+                "  - FanProcess            -> SystemFan\n" +
+                "  - HeatRecoveryProcess   -> SystemExchanger (latent-capable when humidity ratio changes)\n" +
+                "  - HumidificationProcess -> SystemHumidifier\n" +
+                "  - MixingProcess         -> SystemAirJunction\n" +
+                "Undefined/Specific processes are skipped.\n" +
                 "\n" +
-                "To run a simulation, connect the created SystemEnergyCentre to\n" +
-                "the SAMSystems.CreateTPDByTSDAndSystemEnergyCentre component.",
+                "Component duties, off-coil setpoints and the cooling bypass factor are derived from the\n" +
+                "process end-states together with the design airflow (duty = mass flow x enthalpy change;\n" +
+                "bypass factor from the cooling Apparatus Dew Point). The components are then wired in\n" +
+                "process order along an air system inside a plantroom.\n" +
+                "\n" +
+                "TWIN-WHEEL (SUPPLY + EXTRACT)\n" +
+                "Provide an extract chain to model heat recovery with both a supply and an extract air path.\n" +
+                "A single SystemExchanger is shared across both chains (supply on air path 1, extract on air\n" +
+                "path 2), so latent + sensible recovery is represented as one device.\n" +
+                "\n" +
+                "DOWNSTREAM\n" +
+                "The result round-trips to JSON and can be simulated by connecting it to\n" +
+                "SAMSystems.CreateTPDByTSDAndSystemEnergyCentre (Tas annual simulation).",
                 "SAM",
                 "Systems")
         {
@@ -54,11 +73,11 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooMollierProcessParam() { Name = "_supplyMollierProcesses", NickName = "_supplyMollierProcesses", Description = "Ordered supply-side chain of SAM Mollier processes", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Number() { Name = "_supplyAirflow_", NickName = "_supplyAirflow_", Description = "Design supply volumetric airflow [m3/s].\nUsed to derive component duties from the intensive Mollier states.\nLeave empty to create components without duties.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new GooMollierProcessParam() { Name = "_extractMollierProcesses_", NickName = "_extractMollierProcesses_", Description = "Ordered extract-side chain of SAM Mollier processes.\nWhen supplied, a heat-recovery exchanger is shared across the supply and extract air paths (twin-wheel).", Access = GH_ParamAccess.list, Optional = true }, ParamVisibility.Voluntary));
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Number() { Name = "_extractAirflow_", NickName = "_extractAirflow_", Description = "Design extract volumetric airflow [m3/s].", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_name_", NickName = "_name_", Description = "Name for the created SystemEnergyCentre", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
+                result.Add(new GH_SAMParam(new GooMollierProcessParam() { Name = "_supplyMollierProcesses", NickName = "_supplyMollierProcesses", Description = "Ordered supply-side chain of SAM Mollier processes (e.g. mixing -> heat recovery -> cooling -> heating -> fan).\n\nThe list order defines the air flow direction and therefore the component connectivity: the air leaves one component and enters the next in the order given. Each process should start where the previous one ended (process.End -> next process.Start).", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Number() { Name = "_supplyAirflow_", NickName = "_supplyAirflow_", Description = "Design supply volumetric airflow in cubic metres per second [m3/s].\n\nMollier processes describe intensive air states only (no flow), so this is required to size component duties: mass flow = airflow x moist-air density at the process inlet, and duty = mass flow x enthalpy change. Off-coil setpoints and bypass factors do not depend on it.\n\nLeave empty to create the components and connectivity without computed duties.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooMollierProcessParam() { Name = "_extractMollierProcesses_", NickName = "_extractMollierProcesses_", Description = "Optional ordered extract-side chain of SAM Mollier processes (room air -> heat recovery -> extract fan).\n\nWhen supplied, a heat-recovery exchanger that appears in both the supply and extract chains is created once and shared across both air paths (supply on air path 1, extract on air path 2) - i.e. a twin-wheel / run-around unit modelled as a single device. Multiple recovery devices are paired between the chains in order.\n\nLeave empty for a supply-only air handling unit.", Access = GH_ParamAccess.list, Optional = true }, ParamVisibility.Voluntary));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Number() { Name = "_extractAirflow_", NickName = "_extractAirflow_", Description = "Design extract volumetric airflow in cubic metres per second [m3/s], used to size the duties of the extract-side components. Only relevant when an extract chain is supplied.\n\nLeave empty to omit extract-side duties.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_name_", NickName = "_name_", Description = "Name for the created SystemEnergyCentre.\n\nDefaults to \"Energy Centre\" when left empty.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
                 return result.ToArray();
             }
         }
@@ -68,7 +87,7 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "systemEnergyCentre", NickName = "systemEnergyCentre", Description = "SAM SystemEnergyCentre\nto simulate connect the SAMSystems.CreateTPDByTSDAndSystemEnergyCentre component.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "systemEnergyCentre", NickName = "systemEnergyCentre", Description = "The generated SAM SystemEnergyCentre: a plantroom whose air-handling components are connected in the order of the supplied Mollier processes.\n\nIt round-trips to JSON and is ready for simulation - connect it to SAMSystems.CreateTPDByTSDAndSystemEnergyCentre to run an annual Tas simulation.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
                 return result.ToArray();
             }
         }

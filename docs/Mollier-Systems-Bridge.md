@@ -77,8 +77,21 @@ SAM_Systems/SAM.Analytical.Systems.Mollier/
   Create/SupplyExtract.cs                 # supply + extract chains; shared twin-wheel exchanger
 
 Grasshopper/SAM.Analytical.Grasshopper.Systems/
-  Component/SAMSystemsCreateEnergyCentreByMollier.cs   # GH node: Mollier processes → SystemEnergyCentre
+  Component/SAMSystemsCreateEnergyCentreByMollier.cs     # Mollier processes → SystemEnergyCentre
+  Component/SAMSystemsCreatePlantRoomByMollier.cs        # Mollier processes → SystemPlantRoom
+  Component/SAMSystemsCreateComponentByMollierProcess.cs # one process → component + duty + bypass
 ```
+
+### Grasshopper components
+
+| Component | Inputs | Outputs |
+|-----------|--------|---------|
+| `SAMSystems.CreateEnergyCentreByMollier` | supply processes, supply airflow, (extract processes, extract airflow), name | `SystemEnergyCentre` |
+| `SAMSystems.CreatePlantRoomByMollier` | supply processes, supply airflow, (extract processes, extract airflow), name | `SystemPlantRoom` |
+| `SAMSystems.CreateComponentByMollierProcess` | one process, design airflow | `SystemComponent`, duty [W], bypass factor |
+
+All components live in the SAM ▸ Systems tab and carry full per-input/per-output
+descriptions (units, intent, twin-wheel behaviour) in their tooltips.
 
 ### Twin-wheel (supply + extract)
 
@@ -153,9 +166,9 @@ path 1, extract on air path 2); the humidity-ratio shift flags it as latent-capa
 
 - ✅ Core bridge (`Create.SystemComponent` / `SystemPlantRoom` / `SystemEnergyCentre`,
   `Query.Duty` / `BypassFactor` / `SystemComponentType`).
-- ✅ Grasshopper node `SAMSystemsCreateEnergyCentreByMollier` in
-  `SAM.Analytical.Grasshopper.Systems` (inputs: Mollier processes, design airflow, name;
-  output: `SystemEnergyCentre`). The GH project now references `SAM.Core.Mollier` and
+- ✅ Three Grasshopper nodes in `SAM.Analytical.Grasshopper.Systems` (energy centre,
+  plant room, single component), each with comprehensive component/input/output
+  descriptions. The GH project references `SAM.Core.Mollier` and
   `SAM.Geometry.Grasshopper.Mollier` (for `GooMollierProcessParam`) from the SAM_Mollier build.
 - ✅ Overload sourcing `designAirflow` from `AirHandlingUnitResult.SupplyAirFlow`.
 - ✅ Supply + extract overload sharing one heat-recovery exchanger across both air
