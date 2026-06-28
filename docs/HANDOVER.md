@@ -22,9 +22,35 @@ Paper title: *From Psychrometric Process to Simulatable HVAC System*.
 - **CI build break (CS0012)** — RESOLVED: `SAM.Analytical.Grasshopper.Systems.csproj` now
   references `SAM.Analytical.Mollier.dll` (needed because `Create.SystemEnergyCentre`'s overload set
   includes an `AirHandlingUnitResult` param).
-- **Still open / next:** push the core connector fix; reply to Codex on thread #2; the
-  `TwinWheelExample.Verify` runtime self-check has still never actually executed (CI only compiles) —
-  run it once a build environment is available. PR-activity subscription still not enabled.
+- **Codex P1 #3 (`SupplyExtract.cs` heat-recovery efficiencies lost to clone)** — RESOLVED.
+  `SystemPlantRoom.Add` clones the component (`SAM.Core.Systems/Classes/SystemPlantRoom.cs:76`), so
+  `createdExchangers`/`supplyExchangers` held the pre-Add ORIGINAL while the plant room stored a
+  clone; `ApplyHeatRecoveryEfficiencies` mutated the detached original, so the stored/serialised
+  exchanger had no sensible/latent effectiveness (twin-wheel recovery silently dropped). Fix:
+  `ApplyHeatRecoveryEfficiencies` now takes the plant room, looks the exchanger up by Guid via
+  `GetSystemComponent<SystemExchanger>`, sets the efficiencies on that stored instance and re-`Add`s
+  it (re-adding under the same Guid replaces in place — `RelationCluster.TryAddObject` does
+  `dictionary[guid] = object` — leaving connections intact). The twin-wheel WIRING was already
+  correct: `CreateSystemConnection` resolves connectors from the live cluster by Guid, so passing the
+  pre-clone original to `Connect` was fine; only the in-place mutation was lost.
+- **Codex P2 #4 (`SupplyExtract.cs` single-component chain not related to its air system)** —
+  RESOLVED. A 1-process chain never reached the pairwise `Connect(prev, current, …, airSystem)`, so
+  the lone component was never related to its `AirSystem` and `GetSystemComponents<T>(ISystem)` (plus
+  the export/conversion paths on it) saw an empty plant room. `AddChain` now relates the FIRST
+  component to its air system via `Connect(airSystem, current)` when `previous == null`.
+- **Runtime self-check NOW EXECUTED (first time).** Built locally (`dotnet build` of
+  `SAM.Analytical.Systems.Mollier`, deps resolved from `..\..\..\SAM\build` + `..\..\..\SAM_Mollier\build`)
+  and ran `TwinWheelExample.Verify` via a throwaway net8 console harness pointed at `SAM_Systems\build`.
+  **All 14 checks PASS.** `Verify` was strengthened to (a) read sensible/latent effectiveness back
+  from the JSON-round-tripped STORED exchanger (got 0.75 / 0.65 — directly guards P1) and (b) assert a
+  single-component plant room relates its component to its air system (guards P2). Cooling bypass 0.15,
+  cooling duty 53 094 W.
+- **Still open / next:** push these two fixes (branch `…-h7w4ci`, do NOT open a new branch); let #7 CI
+  re-run; reply to / resolve the two Codex threads. Then the SAM_Tas leg (TPD export + CESBP-2025
+  validation) — out of scope of #6/#7, SAM_Tas not checked out. PR-activity subscription still off.
+- **NOTE:** the authoring environment used for earlier sessions could not compile; THIS local
+  environment (michaldengusiak's Windows box) has `dotnet` + prebuilt `SAM`/`SAM_Mollier` `build\`
+  DLLs, so individual `.csproj` build and the bridge runs locally.
 
 ## Repos / branches / environment
 - Two repos: `SAM_Systems` and `SAM_Mollier` (SAM_Tas is **not** in scope/checked out).
@@ -99,12 +125,17 @@ and "mass flor rate from valumetric" typos. No functional change.
 - **Tas TPD export + CESBP-2025 validation** — live in the un-checked-out `SAM_Tas`; out of scope.
 
 ## Suggested next steps
-1. (If agreed) subscribe to PR activity on #7/#6 and auto-address Codex/CI.
-2. Build locally (order: `SAM` → `SAM_Mollier` → `SAM_Systems`) and run
-   `TwinWheelExample.Verify` / the GH example node.
+1. Push the P1 #3 (exchanger clone) + P2 #4 (single-component relation) fixes on branch `…-h7w4ci`
+   (DONE in this session — do NOT branch); let #7 CI re-run; resolve the two Codex threads.
+2. Merge #6 (SAM_Mollier docs) then #7 to `sow/2026-Q3` once green (#7 consumes #6's DLLs).
 3. Optional polish: richer/unique component names, a supply-only example, dedupe checks.
 4. When SAM_Tas is available: hand the `SystemEnergyCentre` to its TPD path; run the CESBP
-   twin-wheel validation (duties + annual energy vs a manual Tas model).
+   twin-wheel validation (duties + annual energy vs a manual Tas model). This is the actual Abstract 2
+   paper deliverable and is out of scope of #6/#7.
+
+(DONE this session: local build + first execution of `TwinWheelExample.Verify` — all 14 checks pass;
+to re-run, build `SAM.Analytical.Systems.Mollier` then run the bridge type's `Verify(out msgs)` from a
+console/GH node with the `SAM_Systems\build` dir on the probe path.)
 
 ## Commit hygiene
 Branch `claude/mollier-hvac-systems-bridge-h7w4ci` in both repos. Commit trailers:

@@ -46,7 +46,7 @@ namespace SAM.Analytical.Systems.Mollier
             int extractCount = AddChain(systemPlantRoom, extractMollierProcesses, designExtractAirflow, "Extract Air System", supplyExchangers, null);
 
             // With both air paths known, derive each shared exchanger's sensible/latent effectiveness.
-            ApplyHeatRecoveryEfficiencies(supplyMollierProcesses, extractMollierProcesses, supplyExchangers);
+            ApplyHeatRecoveryEfficiencies(systemPlantRoom, supplyMollierProcesses, extractMollierProcesses, supplyExchangers);
 
             if (supplyCount == 0 && extractCount == 0)
             {
@@ -123,6 +123,15 @@ namespace SAM.Analytical.Systems.Mollier
                 {
                     systemPlantRoom.Connect(previous, current, out _, airSystem);
                 }
+                else
+                {
+                    // Relate the first component to its air system explicitly. For multi-component chains the
+                    // pairwise Connect above also relates each component to the system, but a single-component
+                    // chain never reaches that call, leaving the lone component unrelated to the air system so
+                    // GetSystemComponents<T>(ISystem) (and the export/conversion paths built on it) see an empty
+                    // plant room.
+                    systemPlantRoom.Connect(airSystem, current);
+                }
 
                 previous = current;
                 count++;
@@ -139,10 +148,17 @@ namespace SAM.Analytical.Systems.Mollier
         /// The supply-side exchangers were created in supply-chain order, one per HeatRecoveryProcess, so they
         /// correspond index-for-index with the ordered supply heat-recovery processes; the extract heat-recovery
         /// processes provide the second (exhaust) air path. See <see cref="Query.HeatRecoveryEfficiencies"/>.
+        /// <para>
+        /// <paramref name="exchangers"/> holds the pre-Add instances, but <see cref="SystemPlantRoom.Add(ISystemComponent)"/>
+        /// stores a clone, so the efficiencies are written back to the stored exchanger (looked up by Guid) rather
+        /// than to the detached original — mutating the original alone would never reach the plant room, the JSON
+        /// or the energy centre. Re-adding the corrected exchanger replaces it in place under the same Guid,
+        /// leaving its connections intact.
+        /// </para>
         /// </remarks>
-        private static void ApplyHeatRecoveryEfficiencies(IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, List<SystemExchanger> exchangers)
+        private static void ApplyHeatRecoveryEfficiencies(SystemPlantRoom systemPlantRoom, IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, List<SystemExchanger> exchangers)
         {
-            if (exchangers == null || exchangers.Count == 0 || supplyMollierProcesses == null || extractMollierProcesses == null)
+            if (systemPlantRoom == null || exchangers == null || exchangers.Count == 0 || supplyMollierProcesses == null || extractMollierProcesses == null)
             {
                 return;
             }
@@ -153,23 +169,39 @@ namespace SAM.Analytical.Systems.Mollier
             int count = System.Math.Min(exchangers.Count, System.Math.Min(supplyHeatRecoveries.Count, extractHeatRecoveries.Count));
             for (int i = 0; i < count; i++)
             {
-                supplyHeatRecoveries[i].HeatRecoveryEfficiencies(extractHeatRecoveries[i], out double sensibleEfficiency, out double latentEfficiency);
-
                 SystemExchanger systemExchanger = exchangers[i];
                 if (systemExchanger == null)
                 {
                     continue;
                 }
 
+                System.Guid guid = systemExchanger.Guid;
+                SystemExchanger systemExchanger_Stored = systemPlantRoom.GetSystemComponent<SystemExchanger>(x => x.Guid == guid);
+                if (systemExchanger_Stored == null)
+                {
+                    continue;
+                }
+
+                supplyHeatRecoveries[i].HeatRecoveryEfficiencies(extractHeatRecoveries[i], out double sensibleEfficiency, out double latentEfficiency);
+
+                bool modified = false;
                 if (!double.IsNaN(sensibleEfficiency))
                 {
-                    systemExchanger.SensibleEfficiency = sensibleEfficiency;
+                    systemExchanger_Stored.SensibleEfficiency = sensibleEfficiency;
+                    modified = true;
                 }
 
                 if (!double.IsNaN(latentEfficiency))
                 {
-                    systemExchanger.LatentEfficiency = latentEfficiency;
-                    systemExchanger.ExchangerLatentType = ExchangerLatentType.HumidityRatio;
+                    systemExchanger_Stored.LatentEfficiency = latentEfficiency;
+                    systemExchanger_Stored.ExchangerLatentType = ExchangerLatentType.HumidityRatio;
+                    modified = true;
+                }
+
+                if (modified)
+                {
+                    // Re-add under the same Guid: replaces the stored exchanger in place, relations preserved.
+                    systemPlantRoom.Add(systemExchanger_Stored);
                 }
             }
         }

@@ -94,7 +94,24 @@ namespace SAM.Analytical.Systems.Mollier
                 SystemEnergyCentre systemEnergyCentre_RoundTrip = new SystemEnergyCentre(jsonObject);
                 List<SystemPlantRoom> systemPlantRooms_RoundTrip = systemEnergyCentre_RoundTrip?.GetSystemPlantRooms();
                 Check(ref result, messages, systemPlantRooms_RoundTrip != null && systemPlantRooms_RoundTrip.Count == 1, "JSON round-trip preserves the plant room");
+
+                // The derived recovery effectiveness must survive into the STORED exchanger and the JSON, not just
+                // sit on a detached object: SystemPlantRoom.Add clones the component, so the efficiencies are read
+                // back here from the round-tripped energy centre.
+                SystemExchanger systemExchanger_RoundTrip = systemPlantRooms_RoundTrip?.FirstOrDefault()?.GetSystemComponents<SystemExchanger>()?.FirstOrDefault();
+                Check(ref result, messages, systemExchanger_RoundTrip != null, "Round-trip plant room contains the shared exchanger");
+                Check(ref result, messages, systemExchanger_RoundTrip?.SensibleEfficiency != null && systemExchanger_RoundTrip.SensibleEfficiency.Value > 0 && systemExchanger_RoundTrip.SensibleEfficiency.Value <= 1, $"Stored exchanger keeps sensible effectiveness (got {systemExchanger_RoundTrip?.SensibleEfficiency?.Value:0.###})");
+                Check(ref result, messages, systemExchanger_RoundTrip?.LatentEfficiency != null && systemExchanger_RoundTrip.LatentEfficiency.Value > 0 && systemExchanger_RoundTrip.LatentEfficiency.Value <= 1, $"Stored exchanger keeps latent effectiveness (got {systemExchanger_RoundTrip?.LatentEfficiency?.Value:0.###})");
             }
+
+            // A single-component chain must still relate its component to the air system, otherwise
+            // GetSystemComponents<T>(ISystem) (and the export paths built on it) would see an empty plant room.
+            MollierPoint singleOutdoor = SAM.Core.Mollier.Create.MollierPoint_ByRelativeHumidity(2, 80, Pressure);
+            HeatingProcess singleHeating = singleOutdoor.HeatingProcess(28);
+            SystemPlantRoom singlePlantRoom = (new List<IMollierProcess> { singleHeating }).SystemPlantRoom(DefaultSupplyAirflow, "Single-Component Plant Room", "Single Air System");
+            List<ISystem> singleSystems = singlePlantRoom?.GetSystems();
+            bool singleRelated = singleSystems != null && singleSystems.Count != 0 && singleSystems.TrueForAll(x => singlePlantRoom.GetSystemComponents<ISystemComponent>(x)?.Count > 0);
+            Check(ref result, messages, singleRelated, "Single-component chain relates its component to the air system");
 
             // Cooling-coil duty and bypass factor derived from the process states.
             MollierProcesses(out List<IMollierProcess> supplyMollierProcesses, out List<IMollierProcess> extractMollierProcesses);
