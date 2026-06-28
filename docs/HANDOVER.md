@@ -45,9 +45,19 @@ Paper title: *From Psychrometric Process to Simulatable HVAC System*.
   from the JSON-round-tripped STORED exchanger (got 0.75 / 0.65 — directly guards P1) and (b) assert a
   single-component plant room relates its component to its air system (guards P2). Cooling bypass 0.15,
   cooling duty 53 094 W.
-- **Still open / next:** push these two fixes (branch `…-h7w4ci`, do NOT open a new branch); let #7 CI
-  re-run; reply to / resolve the two Codex threads. Then the SAM_Tas leg (TPD export + CESBP-2025
-  validation) — out of scope of #6/#7, SAM_Tas not checked out. PR-activity subscription still off.
+- **MERGED 2026-06-28 — bridge work COMPLETE.** All three Codex findings fixed and verified (15/15
+  self-check); SAM_Mollier #6 (squash `0fb6cc7`) then SAM_Systems #7 (squash `1db3cb9`) merged into
+  `sow/2026-Q3`; feature branch `claude/mollier-hvac-systems-bridge-h7w4ci` deleted; local repos synced
+  to `sow/2026-Q3`. Build order fixed first in SAM_Deploy `BuildAll` (`e4e0476`) + the 5 downstream CIs
+  (SAM_Revit, SAM_Revit_UI, SAM_Rhino_UI, SAM_Tas, SAM_UI) so dep-clone builds resolve SAM_Mollier
+  before SAM_Systems.
+- **ONLY ITEM LEFT: confirm the post-merge `sow/2026-Q3` build is green** — `gh run list --repo
+  SAM-BIM/SAM_Systems --branch sow/2026-Q3 --limit 1` (the CI build that compiles SAM → SAM_Mollier →
+  SAM_Systems on the merged branch). Everything else in this handover is done.
+- **NEXT REAL DELIVERABLE — the SAM_Tas leg (the actual Abstract 2 paper):** on a NEW branch off
+  `sow/2026-Q3`, hand the generated `SystemEnergyCentre` to the Tas TPD export, then run the
+  **CESBP-2025 twin-wheel validation** (duties + annual energy vs a manually authored Tas model). This
+  was always out of scope of #6/#7; SAM_Tas is not checked out yet.
 - **NOTE:** the authoring environment used for earlier sessions could not compile; THIS local
   environment (michaldengusiak's Windows box) has `dotnet` + prebuilt `SAM`/`SAM_Mollier` `build\`
   DLLs, so individual `.csproj` build and the bridge runs locally.
@@ -124,18 +134,21 @@ and "mass flor rate from valumetric" typos. No functional change.
   `SystemEnergyCentre.ModifyFanByAirflows` node instead.
 - **Tas TPD export + CESBP-2025 validation** — live in the un-checked-out `SAM_Tas`; out of scope.
 
-## Suggested next steps
-1. Push the P1 #3 (exchanger clone) + P2 #4 (single-component relation) fixes on branch `…-h7w4ci`
-   (DONE in this session — do NOT branch); let #7 CI re-run; resolve the two Codex threads.
-2. Merge #6 (SAM_Mollier docs) then #7 to `sow/2026-Q3` once green (#7 consumes #6's DLLs).
-3. Optional polish: richer/unique component names, a supply-only example, dedupe checks.
-4. When SAM_Tas is available: hand the `SystemEnergyCentre` to its TPD path; run the CESBP
-   twin-wheel validation (duties + annual energy vs a manual Tas model). This is the actual Abstract 2
-   paper deliverable and is out of scope of #6/#7.
+## Next steps
+- [x] Fix the three Codex findings (P1 exchanger-clone, P2 single-component relation, P1 Out→In
+      wiring) — done + verified (15/15 self-check).
+- [x] Merge #6 (SAM_Mollier docs) then #7 to `sow/2026-Q3` — done (`0fb6cc7`, `1db3cb9`).
+- [x] Fix build order so SAM_Mollier builds before SAM_Systems (SAM_Deploy `BuildAll` + 5 downstream
+      CIs) — done.
+- [ ] **Confirm the post-merge `sow/2026-Q3` CI build is green** (the only outstanding item).
+- [ ] **THE REAL ABSTRACT 2 DELIVERABLE — the SAM_Tas leg:** on a new branch off `sow/2026-Q3`, hand
+      the generated `SystemEnergyCentre` to the Tas TPD export and run the CESBP-2025 twin-wheel
+      validation (duties + annual energy vs a manually authored Tas model). Out of scope of #6/#7;
+      SAM_Tas not checked out yet.
+- [ ] Optional polish: richer/unique component names, a supply-only example, dedupe checks.
 
-(DONE this session: local build + first execution of `TwinWheelExample.Verify` — all 14 checks pass;
-to re-run, build `SAM.Analytical.Systems.Mollier` then run the bridge type's `Verify(out msgs)` from a
-console/GH node with the `SAM_Systems\build` dir on the probe path.)
+(To re-run the self-check: build `SAM.Analytical.Systems.Mollier`, then run the bridge type's
+`Verify(out msgs)` from a console/GH node with the `SAM_Systems\build` dir on the probe path.)
 
 ## Commit hygiene
 Branch `claude/mollier-hvac-systems-bridge-h7w4ci` in both repos. Commit trailers:
