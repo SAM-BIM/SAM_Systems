@@ -56,6 +56,13 @@
     <Reference Include="SAM.Geometry.Rhino">
       <HintPath>..\..\..\SAM\build\SAM.Geometry.Rhino.dll</HintPath>
     </Reference>
+    <!-- Mollier bridge dependencies consumed from the sibling SAM_Mollier repo build output. -->
+    <Reference Include="SAM.Core.Mollier">
+      <HintPath>..\..\..\SAM_Mollier\build\SAM.Core.Mollier.dll</HintPath>
+    </Reference>
+    <Reference Include="SAM.Geometry.Grasshopper.Mollier">
+      <HintPath>..\..\..\SAM_Mollier\build\SAM.Geometry.Grasshopper.Mollier.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Grasshopper">
@@ -72,6 +79,7 @@
     <ProjectReference Include="..\..\SAM_Systems\SAM.Analytical.Systems\SAM.Analytical.Systems.csproj" />
     <ProjectReference Include="..\..\SAM_Systems\SAM.Core.Systems\SAM.Core.Systems.csproj" />
     <ProjectReference Include="..\..\SAM_Systems\SAM.Geometry.Systems\SAM.Geometry.Systems.csproj" />
+    <ProjectReference Include="..\..\SAM_Systems\SAM.Analytical.Systems.Mollier\SAM.Analytical.Systems.Mollier.csproj" />
     <ProjectReference Include="..\SAM.Core.Grasshopper.Systems\SAM.Core.Grasshopper.Systems.csproj" />
   </ItemGroup>
   <PropertyGroup />

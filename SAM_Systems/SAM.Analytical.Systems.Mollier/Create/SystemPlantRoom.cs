@@ -84,7 +84,7 @@ namespace SAM.Analytical.Systems.Mollier
 
             string plantRoomName = name ?? (string.IsNullOrWhiteSpace(mollierGroup.Name) ? "Plant Room" : mollierGroup.Name);
 
-            return SystemPlantRoom(mollierProcesses, designAirflow, plantRoomName);
+            return Create.SystemPlantRoom(mollierProcesses, designAirflow, plantRoomName);
         }
     }
 }

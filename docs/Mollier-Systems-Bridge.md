@@ -73,6 +73,10 @@ SAM_Systems/SAM.Analytical.Systems.Mollier/
   Create/SystemComponent.cs               # process → ISystemComponent (duty/setpoint/bypass)
   Create/SystemPlantRoom.cs               # ordered chain → connected plant room
   Create/SystemEnergyCentre.cs            # plant room → energy centre (top-level entry)
+  Create/SystemEnergyCentreByResult.cs    # overload sourcing design airflow from AirHandlingUnitResult
+
+Grasshopper/SAM.Analytical.Grasshopper.Systems/
+  Component/SAMSystemsCreateEnergyCentreByMollier.cs   # GH node: Mollier processes → SystemEnergyCentre
 ```
 
 ## Usage
@@ -88,11 +92,15 @@ SystemEnergyCentre energyCentre = Create.SystemEnergyCentre(mollierGroup, design
 
 ## Status / TODO
 
-- Grasshopper node `SAMSystemsCreateEnergyCentreByMollier` (in
-  `SAM.Analytical.Grasshopper.Systems`) — pending.
-- Optional overload sourcing `designAirflow` from `AirHandlingUnitResult` /
-  `AnalyticalModel` — pending.
-- CESBP-2025 twin-wheel validation against a manually authored Tas model — pending
-  (paper deliverable; Tas export lives in the separate `SAM_Tas` repo).
-- This container has no local build output for the base `SAM` / `SAM_Mollier`
-  repos, so the assembly has not yet been compiled here; build per the order above.
+- ✅ Core bridge (`Create.SystemComponent` / `SystemPlantRoom` / `SystemEnergyCentre`,
+  `Query.Duty` / `BypassFactor` / `SystemComponentType`).
+- ✅ Grasshopper node `SAMSystemsCreateEnergyCentreByMollier` in
+  `SAM.Analytical.Grasshopper.Systems` (inputs: Mollier processes, design airflow, name;
+  output: `SystemEnergyCentre`). The GH project now references `SAM.Core.Mollier` and
+  `SAM.Geometry.Grasshopper.Mollier` (for `GooMollierProcessParam`) from the SAM_Mollier build.
+- ✅ Overload sourcing `designAirflow` from `AirHandlingUnitResult.SupplyAirFlow`.
+- ⏳ CESBP-2025 twin-wheel validation against a manually authored Tas model — paper
+  deliverable; Tas export lives in the separate `SAM_Tas` repo.
+- ⚠️ Not yet compiled: this container has no .NET toolchain and no base `SAM` /
+  `SAM_Mollier` build output. Build locally in the order above (`SAM` + `SAM_Mollier`
+  before `SAM_Systems`) to validate.

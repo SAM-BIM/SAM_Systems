@@ -22,7 +22,7 @@ namespace SAM.Analytical.Systems.Mollier
         /// <returns>A <see cref="SystemEnergyCentre"/>, or null when no plant room could be built.</returns>
         public static SystemEnergyCentre SystemEnergyCentre(this IEnumerable<IMollierProcess> mollierProcesses, double designAirflow = double.NaN, string name = "Energy Centre")
         {
-            SystemPlantRoom systemPlantRoom = SystemPlantRoom(mollierProcesses, designAirflow);
+            SystemPlantRoom systemPlantRoom = Create.SystemPlantRoom(mollierProcesses, designAirflow);
             if (systemPlantRoom == null)
             {
                 return null;
@@ -48,7 +48,7 @@ namespace SAM.Analytical.Systems.Mollier
                 return null;
             }
 
-            SystemPlantRoom systemPlantRoom = SystemPlantRoom(mollierGroup, designAirflow);
+            SystemPlantRoom systemPlantRoom = Create.SystemPlantRoom(mollierGroup, designAirflow);
             if (systemPlantRoom == null)
             {
                 return null;
