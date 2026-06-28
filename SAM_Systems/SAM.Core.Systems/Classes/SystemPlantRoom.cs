@@ -1603,7 +1603,11 @@ namespace SAM.Core.Systems
                 return null;
             }
 
-            return new SystemConnection(new SystemType(system), systemComponent_1, index_1, systemComponent_2, index_2);
+            // Use the connector indexes resolved by TryGetIndexes, not the raw arguments: when the caller passes -1
+            // (auto-select), the raw values would leave the connection unattached to real In/Out connectors, so the
+            // connectors never read as occupied and subsequent links pile onto the same connector. For explicit
+            // indexes TryGetIndexes returns them unchanged, so this is a no-op in that case.
+            return new SystemConnection(new SystemType(system), systemComponent_1, index_1_out, systemComponent_2, index_2_out);
         }
         private bool Add(ISystemConnection systemConnection)
         {

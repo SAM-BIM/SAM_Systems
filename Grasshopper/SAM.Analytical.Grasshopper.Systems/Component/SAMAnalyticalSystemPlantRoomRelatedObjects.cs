@@ -1,4 +1,7 @@
-﻿using Grasshopper.Kernel;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using Grasshopper.Kernel;
 using SAM.Analytical.Grasshopper.Systems.Properties;
 using SAM.Analytical.Systems;
 using SAM.Core.Grasshopper;
@@ -33,7 +36,10 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// </summary>
         public SAMAnalyticalSystemPlantRoomRelatedObjects()
           : base("SystemPlantRoom.RelatedObjects", "SystemPlantRoom.RelatedObjects",
-              "Related Objects in SystemPlantRoom",
+              "Gets the objects related to a given object within a plantroom, optionally filtered by type.\n" +
+              "\n" +
+              "Returns everything the supplied object is related to (components, connections, systems, sensors,\n" +
+              "groups, results, ...). Provide an optional type to return only related objects of that kind.",
               "SAM", "Systems")
         {
         }
@@ -47,8 +53,8 @@ namespace SAM.Analytical.Grasshopper.Systems
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
                 result.Add(new GH_SAMParam(new GooSystemPlantRoomParam() { Name = "_systemPlantRoom", NickName = "_systemPlantRoom", Description = "SAM Analytical SystemPlantRoom", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "_systemObject", NickName = "_systemObject", Description = "SystemObject", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "type_", NickName = "type_", Description = "Type", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "_systemObject", NickName = "_systemObject", Description = "The object whose related objects should be returned.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "type_", NickName = "type_", Description = "Optional type-name filter; only related objects of this type are returned (e.g. component, connection, system, sensor, group). Leave empty to return all related objects.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
                 return result.ToArray();
             }
         }
@@ -61,7 +67,7 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "systemObjects", NickName = "systemObjects", Description = "Related SystemObjects", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "systemObjects", NickName = "systemObjects", Description = "The related system objects (filtered by type when one is given).", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
                 return result.ToArray();
             }
         }

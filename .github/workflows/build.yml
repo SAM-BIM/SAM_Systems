@@ -78,6 +78,7 @@ jobs:
           # Keep the current repo LAST.
           $buildOrder = @(
             'SAM'
+            'SAM_Mollier'
             $repo
           )
 
@@ -140,6 +141,7 @@ jobs:
           # Same build order as above (keep repo LAST)
           $buildOrder = @(
             'SAM'
+            'SAM_Mollier'
             $repo
           )
 

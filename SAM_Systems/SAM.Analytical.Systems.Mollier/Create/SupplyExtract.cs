@@ -1,0 +1,237 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+using System.Collections.Generic;
+using System.Linq;
+using SAM.Core.Mollier;
+using SAM.Core.Systems;
+
+namespace SAM.Analytical.Systems.Mollier
+{
+    public static partial class Create
+    {
+        /// <summary>
+        /// Builds a <see cref="SystemPlantRoom"/> from a supply and an extract chain of Mollier processes,
+        /// sharing a single heat-recovery exchanger across both air paths (e.g. a twin-wheel unit).
+        /// </summary>
+        /// <remarks>
+        /// The supply chain is wired onto a supply <see cref="AirSystem"/> and the extract chain onto an
+        /// extract <see cref="AirSystem"/>. A <see cref="SystemExchanger"/> exposes two air paths (connection
+        /// indexes 1 and 2); when both chains contain heat-recovery processes, the supply-side exchanger
+        /// instances are reused on the extract side, paired in order. Because <see cref="SystemPlantRoom.Connect"/>
+        /// auto-selects the first unconnected connector pair, the supply chain consumes air path 1 and the
+        /// extract chain then consumes air path 2 of the same device — modelling sensible + latent recovery as a
+        /// single exchanger rather than two. If the heat-recovery counts differ between the chains, surplus
+        /// extract heat-recovery processes fall back to their own exchanger.
+        /// </remarks>
+        /// <param name="supplyMollierProcesses">Ordered supply-side process chain.</param>
+        /// <param name="extractMollierProcesses">Ordered extract-side process chain.</param>
+        /// <param name="designSupplyAirflow">Design supply volumetric airflow [m3/s].</param>
+        /// <param name="designExtractAirflow">Design extract volumetric airflow [m3/s].</param>
+        /// <param name="name">Plant room name.</param>
+        /// <returns>A connected <see cref="SystemPlantRoom"/>, or null when no components could be created.</returns>
+        public static SystemPlantRoom SystemPlantRoom(IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, double designSupplyAirflow = double.NaN, double designExtractAirflow = double.NaN, string name = "Plant Room")
+        {
+            if (supplyMollierProcesses == null && extractMollierProcesses == null)
+            {
+                return null;
+            }
+
+            SystemPlantRoom systemPlantRoom = new SystemPlantRoom(name);
+
+            // Supply chain.
+            List<SystemExchanger> supplyExchangers = new List<SystemExchanger>();
+            int supplyCount = AddChain(systemPlantRoom, supplyMollierProcesses, designSupplyAirflow, "Supply Air System", null, supplyExchangers);
+
+            // Extract chain, reusing the supply-side exchangers (in order) so a twin-wheel is one device.
+            int extractCount = AddChain(systemPlantRoom, extractMollierProcesses, designExtractAirflow, "Extract Air System", supplyExchangers, null);
+
+            // With both air paths known, derive each shared exchanger's sensible/latent effectiveness.
+            ApplyHeatRecoveryEfficiencies(systemPlantRoom, supplyMollierProcesses, extractMollierProcesses, supplyExchangers);
+
+            if (supplyCount == 0 && extractCount == 0)
+            {
+                return null;
+            }
+
+            return systemPlantRoom;
+        }
+
+        /// <summary>
+        /// Builds a <see cref="SystemEnergyCentre"/> from a supply and extract Mollier process chain
+        /// (twin-wheel aware). See <see cref="SystemPlantRoom(IEnumerable{IMollierProcess}, IEnumerable{IMollierProcess}, double, double, string)"/>.
+        /// </summary>
+        public static SystemEnergyCentre SystemEnergyCentre(IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, double designSupplyAirflow = double.NaN, double designExtractAirflow = double.NaN, string name = "Energy Centre")
+        {
+            SystemPlantRoom systemPlantRoom = Create.SystemPlantRoom(supplyMollierProcesses, extractMollierProcesses, designSupplyAirflow, designExtractAirflow);
+            if (systemPlantRoom == null)
+            {
+                return null;
+            }
+
+            SystemEnergyCentre systemEnergyCentre = new SystemEnergyCentre(string.IsNullOrWhiteSpace(name) ? "Energy Centre" : name);
+            systemEnergyCentre.Add(systemPlantRoom);
+
+            return systemEnergyCentre;
+        }
+
+        /// <summary>
+        /// Maps and wires one ordered process chain onto its own air system inside the plant room.
+        /// When <paramref name="reusableExchangers"/> is supplied, heat-recovery processes reuse those exchanger
+        /// instances (in order) instead of creating new ones; when <paramref name="createdExchangers"/> is supplied,
+        /// newly created exchangers are appended to it.
+        /// </summary>
+        private static int AddChain(SystemPlantRoom systemPlantRoom, IEnumerable<IMollierProcess> mollierProcesses, double designAirflow, string airSystemName, List<SystemExchanger> reusableExchangers, List<SystemExchanger> createdExchangers)
+        {
+            if (mollierProcesses == null)
+            {
+                return 0;
+            }
+
+            AirSystem airSystem = new AirSystem(airSystemName);
+            systemPlantRoom.Add(airSystem);
+
+            ISystemComponent previous = null;
+            int count = 0;
+            int reuseIndex = 0;
+            foreach (IMollierProcess mollierProcess in mollierProcesses)
+            {
+                ISystemComponent current;
+
+                if (mollierProcess is HeatRecoveryProcess && reusableExchangers != null && reuseIndex < reusableExchangers.Count)
+                {
+                    // Reuse the physical exchanger from the other chain; its second air path is wired here.
+                    current = reusableExchangers[reuseIndex];
+                    reuseIndex++;
+                }
+                else
+                {
+                    current = mollierProcess.SystemComponent(designAirflow);
+                    if (current == null)
+                    {
+                        continue;
+                    }
+
+                    systemPlantRoom.Add(current);
+
+                    if (current is SystemExchanger systemExchanger)
+                    {
+                        createdExchangers?.Add(systemExchanger);
+                    }
+                }
+
+                if (previous != null)
+                {
+                    // Air flows previous.Out -> current.In. Resolve those connectors explicitly: auto-selection
+                    // (-1) takes each component's first unconnected connector, and because air components define
+                    // their In connector before Out it would wire previous.In -> current.Out, leaving the
+                    // upstream Out connector free so Direction.Out ordering (GetOrderedSystemComponents) and the
+                    // export/conversion paths cannot follow the generated chain. Picking the first UNCONNECTED
+                    // Out/In also routes the shared twin-wheel exchanger's second air path onto its second
+                    // connector pair instead of colliding with the first. If a directional connector cannot be
+                    // resolved, fall back to auto-selection rather than skip the link.
+                    SystemType systemType = new SystemType(airSystem);
+                    int index_Out = UnconnectedIndex(systemPlantRoom, previous, systemType, SAM.Core.Direction.Out);
+                    int index_In = UnconnectedIndex(systemPlantRoom, current, systemType, SAM.Core.Direction.In);
+                    if (index_Out != -1 && index_In != -1)
+                    {
+                        systemPlantRoom.Connect(previous, current, out _, airSystem, index_Out, index_In);
+                    }
+                    else
+                    {
+                        systemPlantRoom.Connect(previous, current, out _, airSystem);
+                    }
+                }
+                else
+                {
+                    // Relate the first component to its air system explicitly. For multi-component chains the
+                    // pairwise Connect above also relates each component to the system, but a single-component
+                    // chain never reaches that call, leaving the lone component unrelated to the air system so
+                    // GetSystemComponents<T>(ISystem) (and the export/conversion paths built on it) see an empty
+                    // plant room.
+                    systemPlantRoom.Connect(airSystem, current);
+                }
+
+                previous = current;
+                count++;
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// Returns the first currently-unconnected connector index of the given <paramref name="direction"/> for
+        /// the air <paramref name="systemType"/> on <paramref name="systemComponent"/>, or -1 if there is none.
+        /// </summary>
+        private static int UnconnectedIndex(SystemPlantRoom systemPlantRoom, ISystemComponent systemComponent, SystemType systemType, SAM.Core.Direction direction)
+        {
+            List<int> indexes = systemPlantRoom?.Indexes(systemComponent, systemType, ConnectorStatus.Unconnected, direction);
+            return indexes != null && indexes.Count > 0 ? indexes[0] : -1;
+        }
+
+        /// <summary>
+        /// Sets sensible (and, where moisture is transferred, latent) effectiveness on each shared heat-recovery
+        /// exchanger, by pairing the supply and extract heat-recovery processes in order.
+        /// </summary>
+        /// <remarks>
+        /// The supply-side exchangers were created in supply-chain order, one per HeatRecoveryProcess, so they
+        /// correspond index-for-index with the ordered supply heat-recovery processes; the extract heat-recovery
+        /// processes provide the second (exhaust) air path. See <see cref="Query.HeatRecoveryEfficiencies"/>.
+        /// <para>
+        /// <paramref name="exchangers"/> holds the pre-Add instances, but <see cref="SystemPlantRoom.Add(ISystemComponent)"/>
+        /// stores a clone, so the efficiencies are written back to the stored exchanger (looked up by Guid) rather
+        /// than to the detached original — mutating the original alone would never reach the plant room, the JSON
+        /// or the energy centre. Re-adding the corrected exchanger replaces it in place under the same Guid,
+        /// leaving its connections intact.
+        /// </para>
+        /// </remarks>
+        private static void ApplyHeatRecoveryEfficiencies(SystemPlantRoom systemPlantRoom, IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, List<SystemExchanger> exchangers)
+        {
+            if (systemPlantRoom == null || exchangers == null || exchangers.Count == 0 || supplyMollierProcesses == null || extractMollierProcesses == null)
+            {
+                return;
+            }
+
+            List<HeatRecoveryProcess> supplyHeatRecoveries = supplyMollierProcesses.OfType<HeatRecoveryProcess>().ToList();
+            List<HeatRecoveryProcess> extractHeatRecoveries = extractMollierProcesses.OfType<HeatRecoveryProcess>().ToList();
+
+            int count = System.Math.Min(exchangers.Count, System.Math.Min(supplyHeatRecoveries.Count, extractHeatRecoveries.Count));
+            for (int i = 0; i < count; i++)
+            {
+                SystemExchanger systemExchanger = exchangers[i];
+                if (systemExchanger == null)
+                {
+                    continue;
+                }
+
+                System.Guid guid = systemExchanger.Guid;
+                SystemExchanger systemExchanger_Stored = systemPlantRoom.GetSystemComponent<SystemExchanger>(x => x.Guid == guid);
+                if (systemExchanger_Stored == null)
+                {
+                    continue;
+                }
+
+                supplyHeatRecoveries[i].HeatRecoveryEfficiencies(extractHeatRecoveries[i], out double sensibleEfficiency, out double latentEfficiency);
+
+                bool modified = false;
+                if (!double.IsNaN(sensibleEfficiency))
+                {
+                    systemExchanger_Stored.SensibleEfficiency = sensibleEfficiency;
+                    modified = true;
+                }
+
+                if (!double.IsNaN(latentEfficiency))
+                {
+                    systemExchanger_Stored.LatentEfficiency = latentEfficiency;
+                    systemExchanger_Stored.ExchangerLatentType = ExchangerLatentType.HumidityRatio;
+                    modified = true;
+                }
+
+                if (modified)
+                {
+                    // Re-add under the same Guid: replaces the stored exchanger in place, relations preserved.
+                    systemPlantRoom.Add(systemExchanger_Stored);
+                }
+            }
+        }
+    }
+}

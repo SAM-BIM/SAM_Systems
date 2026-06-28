@@ -40,7 +40,12 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// </summary>
         public SAMAnalyticalSystemConnector()
           : base("SAMAnalytical.SystemConnector", "SAMAnalytical.SystemConnector",
-              "Create System Connector",
+              "Creates a system connector - the in/out port through which a component joins a system - placed\n" +
+              "at a point on the schematic.\n" +
+              "\n" +
+              "Choose the system type the port carries (e.g. AirSystem, LiquidSystem), its flow direction and a\n" +
+              "connection index (which pairs matching In/Out ports on multi-path components). The result is a\n" +
+              "display connector positioned at the given location.",
               "SAM", "Systems")
         {
         }
@@ -53,10 +58,10 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = [];
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_analyticalSystemType", NickName = "_analyticalSystemType", Description = "Analytical System Type", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Point() { Name = "_location", NickName = "_location", Description = "Location", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "direction_", NickName = "direction_", Description = "Direction", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Integer() { Name = "connectionIndex_", NickName = "connectionIndex_", Description = "Connection Index", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_analyticalSystemType", NickName = "_analyticalSystemType", Description = "The analytical system type the connector carries (e.g. AirSystem, LiquidSystem, ElectricalSystem). Use the SAM.AnalyticalSystemType picker.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Point() { Name = "_location", NickName = "_location", Description = "Point at which to place the connector on the schematic.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "direction_", NickName = "direction_", Description = "Flow direction of the port: \"In\" or \"Out\".\n\nOptional: defaults to Undefined.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Integer() { Name = "connectionIndex_", NickName = "connectionIndex_", Description = "Connection index that pairs this port with its opposite on the same component (e.g. 1 and 2 distinguish the two air paths of a heat-recovery exchanger).\n\nOptional: defaults to -1 (unassigned).", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Binding));
 
                 return [.. result];
             }
@@ -70,7 +75,7 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = [];
-                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "systemConnector", NickName = "systemConnector", Description = "System Connector", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "systemConnector", NickName = "systemConnector", Description = "The created display system connector, positioned at the given location.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
                 return [.. result];
             }
         }

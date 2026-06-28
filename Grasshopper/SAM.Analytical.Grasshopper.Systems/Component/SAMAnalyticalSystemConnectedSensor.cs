@@ -35,7 +35,10 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// </summary>
         public SAMAnalyticalSystemConnectedSensor()
           : base("SAMAnalytical.ConnectedSensor", "SAMAnalytical.ConnectedSensor",
-              "Gets Connected SystemSensor",
+              "Finds the SystemSensor that a given system controller reads from, within a plantroom.\n" +
+              "\n" +
+              "A controller references a sensor by id; this component resolves that reference and returns the\n" +
+              "actual SystemSensor object from the plantroom so it can be inspected or rewired.",
               "SAM", "Systems")
         {
         }
@@ -48,8 +51,8 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = [];
-                result.Add(new GH_SAMParam(new GooSystemPlantRoomParam() { Name = "_systemPlantRoom", NickName = "_systemPlantRoom", Description = "SystemPlantRoom", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "_systemController", NickName = "_systemController", Description = "System Controller", Access = GH_ParamAccess.item}, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemPlantRoomParam() { Name = "_systemPlantRoom", NickName = "_systemPlantRoom", Description = "The SAM SystemPlantRoom that contains the controller and its sensor.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "_systemController", NickName = "_systemController", Description = "The system controller whose referenced sensor should be resolved.", Access = GH_ParamAccess.item}, ParamVisibility.Binding));
 
                 return [.. result];
             }
@@ -63,7 +66,7 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = [];
-                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "systemSensor", NickName = "systemSensor", Description = "System Sensor", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "systemSensor", NickName = "systemSensor", Description = "The SystemSensor referenced by the controller (the sensor it reads its measured value from).", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
                 return [.. result];
             }
         }

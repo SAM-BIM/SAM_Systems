@@ -1,4 +1,7 @@
-﻿using Grasshopper.Kernel;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using Grasshopper.Kernel;
 using SAM.Analytical.Grasshopper.Systems.Properties;
 using SAM.Core.Grasshopper;
 using SAM.Core.Systems;
@@ -37,7 +40,11 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// </summary>
         public SAMAnalyticalSystemCreateSystemGeometrySymbol()
           : base("SAMAnalytical.CreateSystemGeometrySymbol", "SAMAnalytical.CreateSystemGeometrySymbol",
-              "Create SystemGeometrySymbol",
+              "Creates a SystemGeometrySymbol - the 2D drawing used to represent an air-handling component on the\n" +
+              "schematic - from geometry plus optional connector ports.\n" +
+              "\n" +
+              "Supplied geometry is projected to 2D and given a default white fill / black outline; any display\n" +
+              "connectors are attached as the symbol's ports.",
               "SAM", "Systems")
         {
         }
@@ -50,8 +57,8 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooSAMGeometryParam() { Name = "_geometries", NickName = "_geometries", Description = "SAM Geometries", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "displaySystemConnectors_", NickName = "displaySystemConnectors_", Description = "SAM Systems DisplaySystemConnectors", Access = GH_ParamAccess.list, Optional = true }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSAMGeometryParam() { Name = "_geometries", NickName = "_geometries", Description = "SAM geometries forming the symbol outline. 3D geometry is projected to 2D; 2D geometry is used as-is.", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "displaySystemConnectors_", NickName = "displaySystemConnectors_", Description = "Display system connectors (ports) to attach to the symbol, e.g. from SAMAnalytical.SystemConnector.\n\nOptional.", Access = GH_ParamAccess.list, Optional = true }, ParamVisibility.Binding));
 
                 return result.ToArray();
             }
@@ -65,7 +72,7 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "systemGeometrySymbol", NickName = "systemGeometrySymbol", Description = "SystemGeometrySymbol", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "systemGeometrySymbol", NickName = "systemGeometrySymbol", Description = "The created SystemGeometrySymbol (2D drawing plus any ports) for use on the schematic.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
                 return result.ToArray();
             }
         }

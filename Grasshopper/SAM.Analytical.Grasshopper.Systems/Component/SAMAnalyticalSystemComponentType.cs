@@ -1,4 +1,7 @@
-﻿using SAM.Analytical.Grasshopper.Systems.Properties;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Analytical.Grasshopper.Systems.Properties;
 using SAM.Analytical.Systems;
 using SAM.Core.Grasshopper;
 using System;
@@ -27,7 +30,10 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// </summary>
         public SAMAnalyticalSystemComponentType()
           : base("SAM.AnalyticalSystemComponentType", "SAM.AnalyticalSystemComponentType",
-              "AnalyticalSystemComponentType",
+              "Selects an analytical air-handling component type (e.g. cooling coil, heating coil, fan,\n" +
+              "exchanger, humidifier) from a drop-down list.\n" +
+              "\n" +
+              "Use it to drive type-dependent logic or to filter/identify components by type.",
               "SAM", "Systems")
         {
         }

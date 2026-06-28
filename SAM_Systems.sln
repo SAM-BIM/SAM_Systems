@@ -16,6 +16,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SAM.Core.Systems", "SAM_Sys
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SAM.Geometry.Systems", "SAM_Systems\SAM.Geometry.Systems\SAM.Geometry.Systems.csproj", "{E5550801-4863-4036-904D-7563C9722760}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SAM.Analytical.Systems.Mollier", "SAM_Systems\SAM.Analytical.Systems.Mollier\SAM.Analytical.Systems.Mollier.csproj", "{D3A1B7E2-9C4F-4A6B-8E15-2F7C6B0A9D34}"
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{F6293AB9-1E86-4F9F-9632-F992D2E2B85F}"
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
@@ -47,6 +49,10 @@ Global
 		{E5550801-4863-4036-904D-7563C9722760}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E5550801-4863-4036-904D-7563C9722760}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E5550801-4863-4036-904D-7563C9722760}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D3A1B7E2-9C4F-4A6B-8E15-2F7C6B0A9D34}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D3A1B7E2-9C4F-4A6B-8E15-2F7C6B0A9D34}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D3A1B7E2-9C4F-4A6B-8E15-2F7C6B0A9D34}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D3A1B7E2-9C4F-4A6B-8E15-2F7C6B0A9D34}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -57,6 +63,7 @@ Global
 		{1BFC8019-2271-4799-9DD2-CC9275A49D84} = {4FDEDAD6-FCEC-4426-9A3B-086BF3C99CC0}
 		{1C86B9AC-81B3-41D8-BA48-321F28AB94F4} = {4FDEDAD6-FCEC-4426-9A3B-086BF3C99CC0}
 		{E5550801-4863-4036-904D-7563C9722760} = {4FDEDAD6-FCEC-4426-9A3B-086BF3C99CC0}
+		{D3A1B7E2-9C4F-4A6B-8E15-2F7C6B0A9D34} = {4FDEDAD6-FCEC-4426-9A3B-086BF3C99CC0}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {4E0308FF-C8D5-4700-951A-859CB9D4FD09}

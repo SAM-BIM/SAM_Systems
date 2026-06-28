@@ -34,7 +34,10 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// </summary>
         public SAMAnalyticalSystemConnectedSystemObjects()
           : base("SAMAnalytical.ConnectedSystemObjects", "SAMAnalytical.ConnectedSystemObjects",
-              "Gets Connected System Components",
+              "Gets every system object related to a given object within a plantroom.\n" +
+              "\n" +
+              "Returns all objects (components, connections, systems, sensors, groups, etc.) that the supplied\n" +
+              "object is related to - a general-purpose way to discover what an object touches in the plantroom.",
               "SAM", "Systems")
         {
         }
@@ -47,8 +50,8 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = [];
-                result.Add(new GH_SAMParam(new GooSystemPlantRoomParam() { Name = "_systemPlantRoom", NickName = "_systemPlantRoom", Description = "SystemPlantRoom", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "_systemObject", NickName = "_systemObject", Description = "System Object", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemPlantRoomParam() { Name = "_systemPlantRoom", NickName = "_systemPlantRoom", Description = "The SAM SystemPlantRoom whose relationships are queried.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "_systemObject", NickName = "_systemObject", Description = "The system object whose related objects should be returned.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
 
                 return [.. result];
             }
@@ -62,7 +65,7 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = [];
-                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "systemObjects", NickName = "systemObjects", Description = "System Objects", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "systemObjects", NickName = "systemObjects", Description = "All system objects related to the supplied object.", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
                 return [.. result];
             }
         }
