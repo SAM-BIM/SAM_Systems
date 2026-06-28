@@ -85,6 +85,13 @@ namespace SAM.Analytical.Systems.Mollier
             if (mollierProcess is HeatRecoveryProcess)
             {
                 SystemExchanger systemExchanger = new SystemExchanger("Heat Recovery");
+
+                // Effectiveness-based exchanger: the SensibleEfficiency/LatentEfficiency fields are used directly.
+                // Efficiencies need both air paths, so they are set later by Create.SystemPlantRoom(supply, extract)
+                // when an extract chain is available (see Query.HeatRecoveryEfficiencies).
+                systemExchanger.ExchangerCalculationMethod = ExchangerCalculationMethod.Simple;
+                systemExchanger.ExchangerType = ExchangerType.Simple;
+
                 if (hasEnd)
                 {
                     systemExchanger.Setpoint = end.DryBulbTemperature;

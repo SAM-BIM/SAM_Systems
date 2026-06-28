@@ -75,6 +75,7 @@ SAM_Systems/SAM.Analytical.Systems.Mollier/
   Create/SystemEnergyCentre.cs            # plant room → energy centre (top-level entry)
   Create/SystemEnergyCentreByResult.cs    # overload sourcing design airflow from AirHandlingUnitResult
   Create/SupplyExtract.cs                 # supply + extract chains; shared twin-wheel exchanger
+  Query/HeatRecoveryEfficiency.cs         # supply-side sensible/latent effectiveness from both paths
 
 Grasshopper/SAM.Analytical.Grasshopper.Systems/
   Component/SAMSystemsCreateEnergyCentreByMollier.cs     # Mollier processes → SystemEnergyCentre
@@ -104,6 +105,13 @@ the **same** exchanger instance. Heat-recovery devices are reused across the two
 paired in order, so a latent + sensible twin-wheel is modelled as one device rather than
 two. The Grasshopper node exposes optional `_extractMollierProcesses_` / `_extractAirflow_`
 inputs for this case.
+
+With both air paths known, each shared exchanger's **sensible and latent effectiveness**
+are derived (supply-side definition, fractions 0–1) via `Query.HeatRecoveryEfficiencies`
+and written to the `SystemExchanger` (`ExchangerCalculationMethod`/`ExchangerType` = `Simple`).
+In supply-only mode the exchanger is still created and flagged latent-capable when the
+process shifts humidity, but efficiencies are left for the user to set (a single process
+cannot determine effectiveness without the exhaust-side inlet).
 
 ## Usage
 

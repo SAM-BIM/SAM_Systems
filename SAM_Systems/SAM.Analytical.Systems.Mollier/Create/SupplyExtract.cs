@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 using System.Collections.Generic;
+using System.Linq;
 using SAM.Core.Mollier;
 using SAM.Core.Systems;
 
@@ -43,6 +44,9 @@ namespace SAM.Analytical.Systems.Mollier
 
             // Extract chain, reusing the supply-side exchangers (in order) so a twin-wheel is one device.
             int extractCount = AddChain(systemPlantRoom, extractMollierProcesses, designExtractAirflow, "Extract Air System", supplyExchangers, null);
+
+            // With both air paths known, derive each shared exchanger's sensible/latent effectiveness.
+            ApplyHeatRecoveryEfficiencies(supplyMollierProcesses, extractMollierProcesses, supplyExchangers);
 
             if (supplyCount == 0 && extractCount == 0)
             {
@@ -125,6 +129,49 @@ namespace SAM.Analytical.Systems.Mollier
             }
 
             return count;
+        }
+
+        /// <summary>
+        /// Sets sensible (and, where moisture is transferred, latent) effectiveness on each shared heat-recovery
+        /// exchanger, by pairing the supply and extract heat-recovery processes in order.
+        /// </summary>
+        /// <remarks>
+        /// The supply-side exchangers were created in supply-chain order, one per HeatRecoveryProcess, so they
+        /// correspond index-for-index with the ordered supply heat-recovery processes; the extract heat-recovery
+        /// processes provide the second (exhaust) air path. See <see cref="Query.HeatRecoveryEfficiencies"/>.
+        /// </remarks>
+        private static void ApplyHeatRecoveryEfficiencies(IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, List<SystemExchanger> exchangers)
+        {
+            if (exchangers == null || exchangers.Count == 0 || supplyMollierProcesses == null || extractMollierProcesses == null)
+            {
+                return;
+            }
+
+            List<HeatRecoveryProcess> supplyHeatRecoveries = supplyMollierProcesses.OfType<HeatRecoveryProcess>().ToList();
+            List<HeatRecoveryProcess> extractHeatRecoveries = extractMollierProcesses.OfType<HeatRecoveryProcess>().ToList();
+
+            int count = System.Math.Min(exchangers.Count, System.Math.Min(supplyHeatRecoveries.Count, extractHeatRecoveries.Count));
+            for (int i = 0; i < count; i++)
+            {
+                supplyHeatRecoveries[i].HeatRecoveryEfficiencies(extractHeatRecoveries[i], out double sensibleEfficiency, out double latentEfficiency);
+
+                SystemExchanger systemExchanger = exchangers[i];
+                if (systemExchanger == null)
+                {
+                    continue;
+                }
+
+                if (!double.IsNaN(sensibleEfficiency))
+                {
+                    systemExchanger.SensibleEfficiency = sensibleEfficiency;
+                }
+
+                if (!double.IsNaN(latentEfficiency))
+                {
+                    systemExchanger.LatentEfficiency = latentEfficiency;
+                    systemExchanger.ExchangerLatentType = ExchangerLatentType.HumidityRatio;
+                }
+            }
         }
     }
 }

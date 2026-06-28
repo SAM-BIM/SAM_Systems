@@ -97,7 +97,7 @@ namespace SAM.Analytical.Systems.Mollier
             }
 
             // Cooling-coil duty and bypass factor derived from the process states.
-            MollierProcesses(out List<IMollierProcess> supplyMollierProcesses, out _);
+            MollierProcesses(out List<IMollierProcess> supplyMollierProcesses, out List<IMollierProcess> extractMollierProcesses);
             CoolingProcess coolingProcess = supplyMollierProcesses.OfType<CoolingProcess>().FirstOrDefault();
             Check(ref result, messages, coolingProcess != null, "Supply chain contains a cooling process");
 
@@ -108,6 +108,18 @@ namespace SAM.Analytical.Systems.Mollier
 
                 double duty = coolingProcess.Duty(DefaultSupplyAirflow);
                 Check(ref result, messages, !double.IsNaN(duty) && duty > 0, $"Cooling duty positive (got {duty:0.} W)");
+            }
+
+            // Twin-wheel recovery effectiveness derived from both air paths.
+            HeatRecoveryProcess supplyHeatRecovery = supplyMollierProcesses.OfType<HeatRecoveryProcess>().FirstOrDefault();
+            HeatRecoveryProcess extractHeatRecovery = extractMollierProcesses.OfType<HeatRecoveryProcess>().FirstOrDefault();
+            Check(ref result, messages, supplyHeatRecovery != null && extractHeatRecovery != null, "Both chains contain a heat-recovery process");
+
+            if (supplyHeatRecovery != null && extractHeatRecovery != null)
+            {
+                supplyHeatRecovery.HeatRecoveryEfficiencies(extractHeatRecovery, out double sensibleEfficiency, out double latentEfficiency);
+                Check(ref result, messages, !double.IsNaN(sensibleEfficiency) && sensibleEfficiency > 0 && sensibleEfficiency <= 1, $"Sensible recovery effectiveness within (0,1] (got {sensibleEfficiency:0.###})");
+                Check(ref result, messages, !double.IsNaN(latentEfficiency) && latentEfficiency >= 0 && latentEfficiency <= 1, $"Latent recovery effectiveness within [0,1] (got {latentEfficiency:0.###})");
             }
 
             return result;
