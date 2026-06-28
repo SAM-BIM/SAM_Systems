@@ -5,6 +5,27 @@ Implement the engineering feature behind **Abstract 2**: convert a chain of psyc
 (Mollier) processes into a connected, simulation-ready `SystemEnergyCentre` in `SAM_Systems`.
 Paper title: *From Psychrometric Process to Simulatable HVAC System*.
 
+## Current status — last updated 2026-06-28 (read this first)
+- **Both PRs open, #7 CI is GREEN** (`build` + `spdx` pass) at head `a931cd0` onward.
+- Work continues on branch **`claude/mollier-hvac-systems-bridge-h7w4ci`** in `SAM_Systems`
+  (NOT `claude/handover-docs-qhfbk4` — that name appeared in a resumed-session header but no such
+  branch exists; everything lives on the `...-h7w4ci` branch and on PR #7).
+- **Codex P1 #1 (TwinWheelExample `Create` qualification)** — RESOLVED (commit `f33786f`,
+  thread now outdated).
+- **Codex P1 #2 (`SupplyExtract.cs:124` connector indexes)** — root cause found + FIXED in core:
+  `SystemPlantRoom.CreateSystemConnection` resolved the connector indexes via `TryGetIndexes`
+  (`index_*_out`) but then built the `SystemConnection` with the raw `-1` args, so connectors never
+  read as occupied and every link piled onto connector 0 (mis-wires even a plain supply chain).
+  Fix = build the connection with `index_1_out/index_2_out`. Backward-compatible (explicit-index
+  callers get `out==in`); the bridge is the only caller of that overload today. Maintainer approved
+  the core change over a bridge-only workaround.
+- **CI build break (CS0012)** — RESOLVED: `SAM.Analytical.Grasshopper.Systems.csproj` now
+  references `SAM.Analytical.Mollier.dll` (needed because `Create.SystemEnergyCentre`'s overload set
+  includes an `AirHandlingUnitResult` param).
+- **Still open / next:** push the core connector fix; reply to Codex on thread #2; the
+  `TwinWheelExample.Verify` runtime self-check has still never actually executed (CI only compiles) —
+  run it once a build environment is available. PR-activity subscription still not enabled.
+
 ## Repos / branches / environment
 - Two repos: `SAM_Systems` and `SAM_Mollier` (SAM_Tas is **not** in scope/checked out).
 - Both work on branch **`claude/mollier-hvac-systems-bridge-h7w4ci`**; PR base is
@@ -57,8 +78,10 @@ Docs-only GH tooltip pass on 9 genuinely-weak components (`MollierPointsByPercen
 and "mass flor rate from valumetric" typos. No functional change.
 
 ## Key facts learned (so you don't re-derive)
-- Wiring API: `SystemPlantRoom.Connect(c1, c2, out conn, system, index_1=-1, index_2=-1)`
-  auto-selects the first **unconnected** connector pair → enables the shared twin-wheel exchanger.
+- Wiring API: `SystemPlantRoom.Connect(c1, c2, out conn, system, index_1=-1, index_2=-1)` is meant
+  to auto-select the first **unconnected** connector pair (enables the shared twin-wheel exchanger).
+  NOTE: core `CreateSystemConnection` had a bug discarding the resolved indexes (see Current status);
+  fixed to use `index_*_out`. `TryGetIndexes` returns explicit indexes unchanged and resolves `-1`.
 - `ModifiableValue` has implicit `double` conversion (`Setpoint = 12.0` works).
 - Efficiency values are **fractions 0–1** (template `MVRE.json` shows `0.7`); exchanger default
   `ExchangerCalculationMethod`/`ExchangerType` = `Simple`.
