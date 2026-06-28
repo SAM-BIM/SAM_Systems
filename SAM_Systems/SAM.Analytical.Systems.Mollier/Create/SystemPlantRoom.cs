@@ -30,29 +30,9 @@ namespace SAM.Analytical.Systems.Mollier
             }
 
             SystemPlantRoom systemPlantRoom = new SystemPlantRoom(name);
-            AirSystem airSystem = new AirSystem(airSystemName);
-            systemPlantRoom.Add(airSystem);
 
-            ISystemComponent previous = null;
-            int count = 0;
-            foreach (IMollierProcess mollierProcess in mollierProcesses)
-            {
-                ISystemComponent current = mollierProcess.SystemComponent(designAirflow);
-                if (current == null)
-                {
-                    continue;
-                }
-
-                systemPlantRoom.Add(current);
-
-                if (previous != null)
-                {
-                    systemPlantRoom.Connect(previous, current, out _, airSystem);
-                }
-
-                previous = current;
-                count++;
-            }
+            // Single supply chain: no exchanger reuse, no exchanger collection needed.
+            int count = AddChain(systemPlantRoom, mollierProcesses, designAirflow, airSystemName, null, null);
 
             if (count == 0)
             {
