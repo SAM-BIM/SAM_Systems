@@ -103,6 +103,52 @@ SystemEnergyCentre energyCentre = Create.SystemEnergyCentre(mollierGroup, design
 // energyCentre.ToJsonObject() -> JSON -> existing Tas TPD export
 ```
 
+## Worked example (twin-wheel AHU)
+
+Reconstructing a twin-wheel (latent + sensible recovery) air-handling unit as a Mollier
+process chain and auto-generating the `SystemEnergyCentre`. The process factories are
+extension methods on `MollierPoint`, and each process `End` feeds the next `Start`.
+Both `SAM.Core.Mollier` and the bridge expose a `Create` class, so the bridge call is
+fully qualified to avoid ambiguity.
+
+```csharp
+using System.Collections.Generic;
+using System.Text.Json.Nodes;
+using SAM.Core.Mollier;     // MollierPoint, process types + factory extension methods
+using SAM.Core.Systems;     // SystemEnergyCentre
+
+const double pressure = 101325; // Pa (sea-level standard)
+
+// Design states
+MollierPoint outdoor = SAM.Core.Mollier.Create.MollierPoint_ByRelativeHumidity(32, 40, pressure); // summer
+MollierPoint room    = SAM.Core.Mollier.Create.MollierPoint_ByRelativeHumidity(24, 50, pressure);
+
+// Supply chain: heat recovery -> cooling -> reheat -> fan
+HeatRecoveryProcess supplyHR = outdoor.HeatRecoveryProcess(room, 0.75, 0.65); // sensible 0.75, latent 0.65
+CoolingProcess      cooling  = supplyHR.End.CoolingProcess(13, 0.85);         // off-coil 13 C, efficiency 0.85
+HeatingProcess      reheat   = cooling.End.HeatingProcess(16);               // reheat to 16 C
+FanProcess          fan      = reheat.End.FanProcess(0.8);                   // specific fan temperature rise
+
+var supply = new List<IMollierProcess> { supplyHR, cooling, reheat, fan };
+
+// Extract chain: same wheel, exhaust side (shared exchanger, air path 2), then extract fan
+HeatRecoveryProcess extractHR  = room.HeatRecoveryProcess(outdoor, 0.75, 0.65, exhaust: true);
+FanProcess          extractFan = extractHR.End.FanProcess(0.8);
+var extract = new List<IMollierProcess> { extractHR, extractFan };
+
+// Bridge: chains -> connected, simulation-ready SystemEnergyCentre
+double supplyAirflow = 2.5;  // m3/s
+double extractAirflow = 2.3; // m3/s
+SystemEnergyCentre energyCentre = SAM.Analytical.Systems.Mollier.Create.SystemEnergyCentre(
+    supply, extract, supplyAirflow, extractAirflow, "Twin-Wheel AHU");
+
+// JSON round-trip; hand off to the existing Tas TPD export for annual simulation
+JsonObject jsonObject = energyCentre.ToJsonObject();
+```
+
+The single `supplyHR`/`extractHR` map to one shared `SystemExchanger` (supply on air
+path 1, extract on air path 2); the humidity-ratio shift flags it as latent-capable.
+
 ## Status / TODO
 
 - ✅ Core bridge (`Create.SystemComponent` / `SystemPlantRoom` / `SystemEnergyCentre`,
