@@ -3,7 +3,6 @@
 
 using System;
 using System.Text.Json.Nodes;
-using SAM.Core;
 using SAM.Core.Systems;
 using SAM.Geometry.Planar;
 
@@ -57,7 +56,7 @@ namespace SAM.Geometry.Systems
             // geometry (Query.TryGetIndexes returns connector list positions aligned with GetPoint2D).
             if (systemType != null && (index_1_Temp == -1 || index_2_Temp == -1))
             {
-                if (Query.TryGetIndexes(this, systemComponent_1, systemComponent_2, out int index_1_Resolved, out int index_2_Resolved, systemType, Direction.Out))
+                if (Query.TryGetIndexes(this, systemComponent_1, systemComponent_2, out int index_1_Resolved, out int index_2_Resolved, systemType, SAM.Core.Direction.Out))
                 {
                     if (index_1_Temp == -1)
                     {
@@ -69,6 +68,14 @@ namespace SAM.Geometry.Systems
                         index_2_Temp = index_2_Resolved;
                     }
                 }
+            }
+
+            // When the air system is known but no unconnected Out/In connector pair could be resolved, there is no
+            // valid connector to attach to: reject the link (as the logical base does via connector availability)
+            // rather than fabricate a connection on an occupied/invalid connector.
+            if (systemType != null && (index_1_Temp == -1 || index_2_Temp == -1))
+            {
+                return null;
             }
 
             SystemGeometryInstance systemGeometryInstance_1 = displaySystemObject_1.SystemGeometry;

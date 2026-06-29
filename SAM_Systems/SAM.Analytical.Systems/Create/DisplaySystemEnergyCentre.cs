@@ -2,7 +2,6 @@
 // Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 using System.Collections.Generic;
 using System.Linq;
-using SAM.Core;
 using SAM.Core.Systems;
 using SAM.Geometry.Planar;
 using SAM.Geometry.Systems;
@@ -155,7 +154,9 @@ namespace SAM.Analytical.Systems
             }
 
             // 2. Re-create each logical connection as a routed display connection between the converted components.
-            HashSet<System.Guid> connectedGuids = new HashSet<System.Guid>();
+            //    Membership is tracked per (air system, component) pair - not globally - so a component shared
+            //    across air systems (e.g. a twin-wheel exchanger) is still related to every system it belongs to.
+            HashSet<string> relatedToSystem = new HashSet<string>();
             List<ISystemConnection> systemConnections = systemPlantRoom.GetSystemConnections();
             if (systemConnections != null)
             {
@@ -183,16 +184,19 @@ namespace SAM.Analytical.Systems
                     systemConnection.TryGetIndex(systemComponent_1, out index_1);
                     systemConnection.TryGetIndex(systemComponent_2, out index_2);
 
-                    if (result.Connect(displaySystemComponent_1, displaySystemComponent_2, out _, system, index_1, index_2))
+                    if (result.Connect(displaySystemComponent_1, displaySystemComponent_2, out _, system, index_1, index_2) && system != null)
                     {
-                        connectedGuids.Add(Guid(systemComponent_1));
-                        connectedGuids.Add(Guid(systemComponent_2));
+                        // Connect relates both endpoints to this system; record those pairs.
+                        System.Guid systemGuid = SystemGuid(system);
+                        relatedToSystem.Add(RelationKey(systemGuid, Guid(systemComponent_1)));
+                        relatedToSystem.Add(RelationKey(systemGuid, Guid(systemComponent_2)));
                     }
                 }
             }
 
-            // 3. Relate any component that has no connection (e.g. a single-component air system) to its air
-            //    system, so the display plant room mirrors the logical one's system membership.
+            // 3. Relate each component to every air system it belongs to but is not yet related to (e.g. a
+            //    single-component air system, or a shared component that is the lone component on one chain), so
+            //    the display plant room mirrors the logical one's per-system membership.
             if (systems != null)
             {
                 foreach (ISystem system in systems)
@@ -203,6 +207,7 @@ namespace SAM.Analytical.Systems
                         continue;
                     }
 
+                    System.Guid systemGuid = SystemGuid(system);
                     foreach (ISystemComponent systemComponent in systemComponents)
                     {
                         if (systemComponent is ISystemConnection)
@@ -211,7 +216,7 @@ namespace SAM.Analytical.Systems
                         }
 
                         System.Guid guid = Guid(systemComponent);
-                        if (connectedGuids.Contains(guid))
+                        if (relatedToSystem.Contains(RelationKey(systemGuid, guid)))
                         {
                             continue;
                         }
@@ -219,6 +224,7 @@ namespace SAM.Analytical.Systems
                         if (dictionary.TryGetValue(guid, out ISystemComponent displaySystemComponent))
                         {
                             result.Connect(system, displaySystemComponent);
+                            relatedToSystem.Add(RelationKey(systemGuid, guid));
                         }
                     }
                 }
@@ -244,12 +250,12 @@ namespace SAM.Analytical.Systems
             }
 
             // Chain head: a component whose In connector for this air system is still unconnected.
-            List<ISystemComponent> heads = systemPlantRoom.GetSystemComponents<ISystemComponent>(system, ConnectorStatus.Unconnected, Direction.In);
+            List<ISystemComponent> heads = systemPlantRoom.GetSystemComponents<ISystemComponent>(system, ConnectorStatus.Unconnected, SAM.Core.Direction.In);
             heads?.RemoveAll(x => x is ISystemConnection);
             ISystemComponent head = heads != null && heads.Count > 0 ? heads[0] : systemComponents[0];
             result.Add(head);
 
-            List<ISystemComponent> orderedSystemComponents = systemPlantRoom.GetOrderedSystemComponents(head, system, Direction.Out);
+            List<ISystemComponent> orderedSystemComponents = systemPlantRoom.GetOrderedSystemComponents(head, system, SAM.Core.Direction.Out);
             if (orderedSystemComponents != null)
             {
                 foreach (ISystemComponent systemComponent in orderedSystemComponents)
@@ -281,7 +287,17 @@ namespace SAM.Analytical.Systems
 
         private static System.Guid Guid(ISystemComponent systemComponent)
         {
-            return systemComponent is SAMObject sAMObject ? sAMObject.Guid : System.Guid.Empty;
+            return systemComponent is SAM.Core.SAMObject sAMObject ? sAMObject.Guid : System.Guid.Empty;
+        }
+
+        private static System.Guid SystemGuid(ISystem system)
+        {
+            return system is SAM.Core.SAMObject sAMObject ? sAMObject.Guid : System.Guid.Empty;
+        }
+
+        private static string RelationKey(System.Guid systemGuid, System.Guid componentGuid)
+        {
+            return systemGuid.ToString() + "|" + componentGuid.ToString();
         }
     }
 }
