@@ -57,7 +57,6 @@ namespace SAM.Analytical.Grasshopper.Systems
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_run_", NickName = "_run_", Description = "Set to true to build the example twin-wheel system and run the self-check.\n\nDefaults to true.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Binding));
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Number() { Name = "_supplyAirflow_", NickName = "_supplyAirflow_", Description = "Design supply volumetric airflow [m3/s] used to size the example component duties.\n\nDefaults to 2.5 m3/s.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Number() { Name = "_extractAirflow_", NickName = "_extractAirflow_", Description = "Design extract volumetric airflow [m3/s] used to size the example extract-side duties.\n\nDefaults to 2.3 m3/s.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_display_", NickName = "_display_", Description = "When true, also build a previewable schematic (laid-out symbols + routed connections) of the\nexample and expose it on the 'displaySystemObjects' output.\n\nDefaults to true.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
                 return result.ToArray();
             }
         }
@@ -67,11 +66,11 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "systemEnergyCentre", NickName = "systemEnergyCentre", Description = "The example twin-wheel SystemEnergyCentre, ready to serialise or simulate.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "systemEnergyCentre", NickName = "systemEnergyCentre", Description = "The example twin-wheel SystemEnergyCentre, ready to serialise or simulate. It is built display-native (its components are DisplaySystem* objects with symbols + layout), so it is also drawable - explode it (e.g. via 'displaySystemObjects') to preview the schematic.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "report", NickName = "report", Description = "Self-check results: one PASS/FAIL line per check.", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "success", NickName = "success", Description = "True only when every self-check passes.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "displaySystemObjects", NickName = "displaySystemObjects", Description = "Laid-out display components and connections of the example. Preview/bake these to see the schematic.\n\nPopulated only when _display_ is true.", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new GooSystemPlantRoomParam() { Name = "displaySystemPlantRooms", NickName = "displaySystemPlantRooms", Description = "The generated DisplaySystemPlantRoom(s) of the example.\n\nPopulated only when _display_ is true.", Access = GH_ParamAccess.list }, ParamVisibility.Voluntary));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "displaySystemObjects", NickName = "displaySystemObjects", Description = "The example's laid-out display components and connections (flattened from the SystemEnergyCentre). Preview/bake these to see the schematic.", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemPlantRoomParam() { Name = "displaySystemPlantRooms", NickName = "displaySystemPlantRooms", Description = "The example's DisplaySystemPlantRoom(s).", Access = GH_ParamAccess.list }, ParamVisibility.Voluntary));
                 return result.ToArray();
             }
         }
@@ -132,59 +131,47 @@ namespace SAM.Analytical.Grasshopper.Systems
                 dataAccess.SetData(index, success);
             }
 
-            bool display = true;
-            index = Params.IndexOfInputParam("_display_");
-            if (index != -1)
+            // The bridge output is built display-native, so the SystemEnergyCentre already holds DisplaySystem*
+            // objects. Flatten them out as GooSystemObjects so they can be previewed/baked directly on the canvas
+            // (a SystemEnergyCentre/SystemPlantRoom does not preview by itself - only the display objects do).
+            List<SystemPlantRoom> displaySystemPlantRooms = new List<SystemPlantRoom>();
+            List<ISystemJSAMObject> displaySystemObjects = new List<ISystemJSAMObject>();
+            List<SystemPlantRoom> systemPlantRooms = systemEnergyCentre?.GetSystemPlantRooms();
+            if (systemPlantRooms != null)
             {
-                dataAccess.GetData(index, ref display);
-            }
-
-            if (display)
-            {
-                DisplaySystemEnergyCentre displaySystemEnergyCentre = SAM.Analytical.Systems.Create.DisplaySystemEnergyCentre(systemEnergyCentre, out List<string> displayReport);
-
-                List<DisplaySystemPlantRoom> displaySystemPlantRooms = new List<DisplaySystemPlantRoom>();
-                List<ISystemJSAMObject> displaySystemObjects = new List<ISystemJSAMObject>();
-                if (displaySystemEnergyCentre != null)
+                foreach (SystemPlantRoom systemPlantRoom in systemPlantRooms)
                 {
-                    List<DisplaySystemPlantRoom> displaySystemPlantRooms_Temp = displaySystemEnergyCentre.GetSystemPlantRooms();
-                    if (displaySystemPlantRooms_Temp != null)
+                    if (systemPlantRoom == null)
                     {
-                        foreach (DisplaySystemPlantRoom displaySystemPlantRoom in displaySystemPlantRooms_Temp)
+                        continue;
+                    }
+
+                    displaySystemPlantRooms.Add(systemPlantRoom);
+
+                    List<ISystemComponent> systemComponents = systemPlantRoom.GetSystemComponents();
+                    if (systemComponents != null)
+                    {
+                        foreach (ISystemComponent systemComponent in systemComponents)
                         {
-                            if (displaySystemPlantRoom == null)
+                            if (systemComponent is IDisplaySystemObject)
                             {
-                                continue;
-                            }
-
-                            displaySystemPlantRooms.Add(displaySystemPlantRoom);
-
-                            List<ISystemComponent> systemComponents = displaySystemPlantRoom.GetSystemComponents();
-                            if (systemComponents != null)
-                            {
-                                foreach (ISystemComponent systemComponent in systemComponents)
-                                {
-                                    if (systemComponent is IDisplaySystemObject)
-                                    {
-                                        displaySystemObjects.Add(systemComponent);
-                                    }
-                                }
+                                displaySystemObjects.Add(systemComponent);
                             }
                         }
                     }
                 }
+            }
 
-                index = Params.IndexOfOutputParam("displaySystemObjects");
-                if (index != -1)
-                {
-                    dataAccess.SetDataList(index, displaySystemObjects);
-                }
+            index = Params.IndexOfOutputParam("displaySystemObjects");
+            if (index != -1)
+            {
+                dataAccess.SetDataList(index, displaySystemObjects);
+            }
 
-                index = Params.IndexOfOutputParam("displaySystemPlantRooms");
-                if (index != -1)
-                {
-                    dataAccess.SetDataList(index, displaySystemPlantRooms);
-                }
+            index = Params.IndexOfOutputParam("displaySystemPlantRooms");
+            if (index != -1)
+            {
+                dataAccess.SetDataList(index, displaySystemPlantRooms);
             }
         }
     }

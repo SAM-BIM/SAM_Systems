@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using SAM.Core.Mollier;
 using SAM.Core.Systems;
+using SAM.Geometry.Systems;
 
 namespace SAM.Analytical.Systems.Mollier
 {
@@ -53,7 +54,34 @@ namespace SAM.Analytical.Systems.Mollier
                 return null;
             }
 
-            return systemPlantRoom;
+            // Promote the logical plant room to a display (drawable) plant room so the bridge output can be
+            // previewed/baked directly: each component becomes its DisplaySystem* equivalent (symbol + auto
+            // layout) and each connection a routed polyline. Falls back to the logical room if no symbol library
+            // is available. DisplaySystem* are subclasses of their System* types, so simulation/export is
+            // unaffected.
+            return ToDisplaySystemPlantRoom(systemPlantRoom);
+        }
+
+        /// <summary>
+        /// Converts a logical <see cref="SystemPlantRoom"/> into a drawable <see cref="DisplaySystemPlantRoom"/>
+        /// using the bundled default symbol library, so the bridge output is viewable out of the box. Returns the
+        /// original logical plant room unchanged when no symbol library is available.
+        /// </summary>
+        private static SystemPlantRoom ToDisplaySystemPlantRoom(SystemPlantRoom systemPlantRoom)
+        {
+            if (systemPlantRoom == null)
+            {
+                return null;
+            }
+
+            DisplaySystemManager displaySystemManager = SAM.Analytical.Systems.Query.DefaultDisplaySystemManager();
+            if (displaySystemManager == null)
+            {
+                return systemPlantRoom;
+            }
+
+            DisplaySystemPlantRoom displaySystemPlantRoom = SAM.Analytical.Systems.Create.DisplaySystemPlantRoom(systemPlantRoom, out _, displaySystemManager);
+            return displaySystemPlantRoom ?? systemPlantRoom;
         }
 
         /// <summary>

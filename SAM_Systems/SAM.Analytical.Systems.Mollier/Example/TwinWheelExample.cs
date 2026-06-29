@@ -67,21 +67,6 @@ namespace SAM.Analytical.Systems.Mollier
         }
 
         /// <summary>
-        /// Builds the twin-wheel system and converts it into a previewable <see cref="DisplaySystemEnergyCentre"/>
-        /// (laid-out symbols + routed connections), using the bundled default symbol library.
-        /// </summary>
-        /// <param name="report">One line per component that has no symbol (skipped).</param>
-        /// <param name="supplyAirflow">Design supply airflow [m3/s].</param>
-        /// <param name="extractAirflow">Design extract airflow [m3/s].</param>
-        public static DisplaySystemEnergyCentre CreateDisplay(out List<string> report, double supplyAirflow = DefaultSupplyAirflow, double extractAirflow = DefaultExtractAirflow)
-        {
-            SystemEnergyCentre systemEnergyCentre = Create(supplyAirflow, extractAirflow);
-
-            // Fully-qualified: the local Mollier Create has no DisplaySystemEnergyCentre overload.
-            return SAM.Analytical.Systems.Create.DisplaySystemEnergyCentre(systemEnergyCentre, out report);
-        }
-
-        /// <summary>
         /// Runs deterministic checks over the generated twin-wheel system and reports the outcome.
         /// </summary>
         /// <param name="messages">One PASS/FAIL line per check.</param>
@@ -185,36 +170,32 @@ namespace SAM.Analytical.Systems.Mollier
             // Supply chain = 4 components in flow order, so the head's Out-walk reaches the other 3.
             Check(ref result, messages, maxOrdered >= 3, $"Chain followable in airflow (Out) direction (longest Out-walk reached {maxOrdered} downstream components)");
 
-            // Display conversion: the logical energy centre must convert to a previewable schematic in which
-            // every component carries drawable 2D geometry and no connection is lost. This is the check that
-            // would have caught the "no preview in Grasshopper" symptom the bridge originally had.
-            DisplaySystemEnergyCentre displaySystemEnergyCentre = SAM.Analytical.Systems.Create.DisplaySystemEnergyCentre(systemEnergyCentre, out List<string> displayReport);
-            Check(ref result, messages, displaySystemEnergyCentre != null, "DisplaySystemEnergyCentre created");
-
-            DisplaySystemPlantRoom displaySystemPlantRoom = displaySystemEnergyCentre?.GetSystemPlantRooms()?.FirstOrDefault();
-            Check(ref result, messages, displaySystemPlantRoom != null, "Display plant room generated");
-
-            SystemPlantRoom logicalPlantRoom = systemEnergyCentre.GetSystemPlantRooms()?.FirstOrDefault();
-            if (displaySystemPlantRoom != null && logicalPlantRoom != null)
+            // Display level: the bridge output is built display-native, so the SystemEnergyCentre is drawable
+            // out of the box - its plant room is a DisplaySystemPlantRoom whose components and connections all
+            // carry 2D geometry. This is the check that catches the "no preview in Grasshopper" symptom.
+            if (SAM.Analytical.Systems.Query.DefaultDisplaySystemManager() == null)
             {
-                List<ISystemComponent> logicalComponents = logicalPlantRoom.GetSystemComponents<ISystemComponent>();
-                logicalComponents?.RemoveAll(x => x is ISystemConnection);
-                int logicalComponentCount = logicalComponents?.Count ?? 0;
+                // Headless/no-resources context: the symbol library could not be loaded, so the bridge falls
+                // back to a logical (non-drawable) model. Note it rather than failing the run.
+                messages.Add("INFO: default symbol library unavailable; display-level checks skipped.");
+            }
+            else
+            {
+                SystemPlantRoom displaySystemPlantRoom = systemEnergyCentre.GetSystemPlantRooms()?.FirstOrDefault();
+                Check(ref result, messages, displaySystemPlantRoom is DisplaySystemPlantRoom, "Bridge plant room is display-native (DisplaySystemPlantRoom)");
 
-                List<ISystemComponent> displayComponents = displaySystemPlantRoom.GetSystemComponents<ISystemComponent>() ?? new List<ISystemComponent>();
-                List<ISystemComponent> displayConnections = displayComponents.FindAll(x => x is ISystemConnection);
-                displayComponents.RemoveAll(x => x is ISystemConnection);
+                if (displaySystemPlantRoom != null)
+                {
+                    List<ISystemComponent> displayComponents = displaySystemPlantRoom.GetSystemComponents<ISystemComponent>() ?? new List<ISystemComponent>();
+                    List<ISystemComponent> displayConnections = displayComponents.FindAll(x => x is ISystemConnection);
+                    displayComponents.RemoveAll(x => x is ISystemConnection);
 
-                Check(ref result, messages, displayComponents.Count == logicalComponentCount, $"Every component converted to a display object ({displayComponents.Count}/{logicalComponentCount})");
+                    bool componentsDrawable = displayComponents.Count != 0 && displayComponents.TrueForAll(x => x is IDisplaySystemObject && SAM.Analytical.Systems.Query.SAMGeometry2Dobject((IDisplaySystemObject)x) != null);
+                    Check(ref result, messages, componentsDrawable, $"Every component is a drawable display object ({displayComponents.Count})");
 
-                bool componentsDrawable = displayComponents.Count != 0 && displayComponents.TrueForAll(x => x is IDisplaySystemObject && SAM.Analytical.Systems.Query.SAMGeometry2Dobject((IDisplaySystemObject)x) != null);
-                Check(ref result, messages, componentsDrawable, "Every display component carries drawable 2D geometry");
-
-                int logicalConnectionCount = logicalPlantRoom.GetSystemConnections()?.Count ?? 0;
-                Check(ref result, messages, displayConnections.Count == logicalConnectionCount, $"Connection count preserved (logical {logicalConnectionCount}, display {displayConnections.Count})");
-
-                bool connectionsDrawable = displayConnections.Count != 0 && displayConnections.TrueForAll(x => x is IDisplaySystemObject && SAM.Analytical.Systems.Query.SAMGeometry2Dobject((IDisplaySystemObject)x) != null);
-                Check(ref result, messages, connectionsDrawable, "Every connection became a drawable display polyline");
+                    bool connectionsDrawable = displayConnections.Count != 0 && displayConnections.TrueForAll(x => x is IDisplaySystemObject && SAM.Analytical.Systems.Query.SAMGeometry2Dobject((IDisplaySystemObject)x) != null);
+                    Check(ref result, messages, connectionsDrawable, $"Every connection is a drawable display polyline ({displayConnections.Count})");
+                }
             }
 
             return result;

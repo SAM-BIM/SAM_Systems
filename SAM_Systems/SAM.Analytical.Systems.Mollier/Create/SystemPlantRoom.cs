@@ -39,7 +39,8 @@ namespace SAM.Analytical.Systems.Mollier
                 return null;
             }
 
-            return systemPlantRoom;
+            // Promote to a drawable display plant room (falls back to logical when no symbol library is present).
+            return ToDisplaySystemPlantRoom(systemPlantRoom);
         }
 
         /// <summary>
