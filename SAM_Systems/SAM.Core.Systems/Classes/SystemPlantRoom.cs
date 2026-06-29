@@ -240,6 +240,11 @@ namespace SAM.Core.Systems
                 return false;
             }
 
+            if(systemRelationCluster is null)
+            {
+                systemRelationCluster = new SystemRelationCluster();
+            }
+
             if (!systemRelationCluster.Contains(system))
             {
                 Add(system);
@@ -280,6 +285,11 @@ namespace SAM.Core.Systems
             if (systemComponent_1 == null || systemComponent_2 == null)
             {
                 return false;
+            }
+
+            if(systemRelationCluster is null)
+            {
+                systemRelationCluster = new SystemRelationCluster();
             }
 
             if (!systemRelationCluster.Contains(systemComponent_1))
