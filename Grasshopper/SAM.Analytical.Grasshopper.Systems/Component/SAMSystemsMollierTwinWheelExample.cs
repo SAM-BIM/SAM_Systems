@@ -5,6 +5,7 @@ using Grasshopper.Kernel;
 using SAM.Analytical.Grasshopper.Systems.Properties;
 using SAM.Core.Grasshopper;
 using SAM.Core.Systems;
+using SAM.Geometry.Systems;
 using System;
 using System.Collections.Generic;
 
@@ -56,6 +57,7 @@ namespace SAM.Analytical.Grasshopper.Systems
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_run_", NickName = "_run_", Description = "Set to true to build the example twin-wheel system and run the self-check.\n\nDefaults to true.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Binding));
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Number() { Name = "_supplyAirflow_", NickName = "_supplyAirflow_", Description = "Design supply volumetric airflow [m3/s] used to size the example component duties.\n\nDefaults to 2.5 m3/s.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Number() { Name = "_extractAirflow_", NickName = "_extractAirflow_", Description = "Design extract volumetric airflow [m3/s] used to size the example extract-side duties.\n\nDefaults to 2.3 m3/s.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_display_", NickName = "_display_", Description = "When true, also build a previewable schematic (laid-out symbols + routed connections) of the\nexample and expose it on the 'displaySystemObjects' output.\n\nDefaults to true.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
                 return result.ToArray();
             }
         }
@@ -68,6 +70,8 @@ namespace SAM.Analytical.Grasshopper.Systems
                 result.Add(new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "systemEnergyCentre", NickName = "systemEnergyCentre", Description = "The example twin-wheel SystemEnergyCentre, ready to serialise or simulate.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "report", NickName = "report", Description = "Self-check results: one PASS/FAIL line per check.", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "success", NickName = "success", Description = "True only when every self-check passes.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "displaySystemObjects", NickName = "displaySystemObjects", Description = "Laid-out display components and connections of the example. Preview/bake these to see the schematic.\n\nPopulated only when _display_ is true.", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemPlantRoomParam() { Name = "displaySystemPlantRooms", NickName = "displaySystemPlantRooms", Description = "The generated DisplaySystemPlantRoom(s) of the example.\n\nPopulated only when _display_ is true.", Access = GH_ParamAccess.list }, ParamVisibility.Voluntary));
                 return result.ToArray();
             }
         }
@@ -126,6 +130,61 @@ namespace SAM.Analytical.Grasshopper.Systems
             if (index != -1)
             {
                 dataAccess.SetData(index, success);
+            }
+
+            bool display = true;
+            index = Params.IndexOfInputParam("_display_");
+            if (index != -1)
+            {
+                dataAccess.GetData(index, ref display);
+            }
+
+            if (display)
+            {
+                DisplaySystemEnergyCentre displaySystemEnergyCentre = SAM.Analytical.Systems.Create.DisplaySystemEnergyCentre(systemEnergyCentre, out List<string> displayReport);
+
+                List<DisplaySystemPlantRoom> displaySystemPlantRooms = new List<DisplaySystemPlantRoom>();
+                List<ISystemJSAMObject> displaySystemObjects = new List<ISystemJSAMObject>();
+                if (displaySystemEnergyCentre != null)
+                {
+                    List<DisplaySystemPlantRoom> displaySystemPlantRooms_Temp = displaySystemEnergyCentre.GetSystemPlantRooms();
+                    if (displaySystemPlantRooms_Temp != null)
+                    {
+                        foreach (DisplaySystemPlantRoom displaySystemPlantRoom in displaySystemPlantRooms_Temp)
+                        {
+                            if (displaySystemPlantRoom == null)
+                            {
+                                continue;
+                            }
+
+                            displaySystemPlantRooms.Add(displaySystemPlantRoom);
+
+                            List<ISystemComponent> systemComponents = displaySystemPlantRoom.GetSystemComponents();
+                            if (systemComponents != null)
+                            {
+                                foreach (ISystemComponent systemComponent in systemComponents)
+                                {
+                                    if (systemComponent is IDisplaySystemObject)
+                                    {
+                                        displaySystemObjects.Add(systemComponent);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                index = Params.IndexOfOutputParam("displaySystemObjects");
+                if (index != -1)
+                {
+                    dataAccess.SetDataList(index, displaySystemObjects);
+                }
+
+                index = Params.IndexOfOutputParam("displaySystemPlantRooms");
+                if (index != -1)
+                {
+                    dataAccess.SetDataList(index, displaySystemPlantRooms);
+                }
             }
         }
     }

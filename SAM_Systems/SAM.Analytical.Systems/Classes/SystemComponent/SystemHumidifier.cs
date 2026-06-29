@@ -6,17 +6,23 @@ using System;
 
 namespace SAM.Analytical.Systems
 {
-    public class SystemHumidifier : SystemComponent, IAirSystemComponent
+    /// <summary>
+    /// Abstract base for air humidification components. Concrete behaviour (spray/adiabatic, steam, direct
+    /// evaporative) lives in the subtypes <see cref="SystemSprayHumidifier"/>, <see cref="SystemSteamHumidifier"/>
+    /// and <see cref="SystemDirectEvaporativeCooler"/>, each of which has its own display symbol in
+    /// SAM_DisplaySystemManager.JSON. The base is abstract so callers always choose a concrete, drawable type.
+    /// </summary>
+    public abstract class SystemHumidifier : SystemComponent, IAirSystemComponent
     {
         public string ScheduleName { get; set; }
 
-        public SystemHumidifier(string name)
+        protected SystemHumidifier(string name)
             : base(name)
         {
 
         }
 
-        public SystemHumidifier(SystemHumidifier systemHumidifier)
+        protected SystemHumidifier(SystemHumidifier systemHumidifier)
             : base(systemHumidifier)
         {
             if(systemHumidifier != null)
@@ -25,7 +31,7 @@ namespace SAM.Analytical.Systems
             }
         }
 
-        public SystemHumidifier(System.Guid guid, SystemHumidifier systemHumidifier)
+        protected SystemHumidifier(System.Guid guid, SystemHumidifier systemHumidifier)
             : base(guid, systemHumidifier)
         {
             if (systemHumidifier != null)
@@ -34,7 +40,7 @@ namespace SAM.Analytical.Systems
             }
         }
 
-        public SystemHumidifier(JsonObject jObject)
+        protected SystemHumidifier(JsonObject jObject)
             : base(jObject)
         {
 
@@ -85,9 +91,8 @@ namespace SAM.Analytical.Systems
             return result;
         }
 
-        public override SystemObject Duplicate(Guid? guid = null)
-        {
-            return new SystemHumidifier(guid == null ? Guid.NewGuid() : guid.Value, this);
-        }
+        // Abstract: each concrete humidifier subtype provides its own Duplicate so the base type is never
+        // instantiated. This keeps deep-copy/round-trip working without a drawable, concrete-less base instance.
+        public abstract override SystemObject Duplicate(Guid? guid = null);
     }
 }

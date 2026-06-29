@@ -119,7 +119,15 @@ namespace SAM.Analytical.Systems.Mollier
 
             if (mollierProcess is HumidificationProcess)
             {
-                return new SystemHumidifier("Humidifier");
+                // SystemHumidifier is abstract, so emit the concrete humidifier whose physics (and drawing
+                // symbol) matches the process: adiabatic (constant-enthalpy) humidification is spray/evaporative;
+                // isothermal (constant-temperature, incl. steam) humidification is a steam humidifier.
+                if (mollierProcess is AdiabaticHumidificationProcess)
+                {
+                    return new SystemSprayHumidifier("Humidifier");
+                }
+
+                return new SystemSteamHumidifier("Humidifier");
             }
 
             if (mollierProcess is MixingProcess)

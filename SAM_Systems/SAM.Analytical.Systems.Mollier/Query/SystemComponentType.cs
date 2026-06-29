@@ -46,7 +46,10 @@ namespace SAM.Analytical.Systems.Mollier
 
             if (mollierProcess is HumidificationProcess)
             {
-                return typeof(SystemHumidifier);
+                // Return the concrete humidifier type (not the abstract SystemHumidifier base), so the
+                // symbol-manager lookup resolves to a real, drawable symbol. Adiabatic -> spray; isothermal
+                // (incl. steam) -> steam, matching Create.SystemComponent.
+                return mollierProcess is AdiabaticHumidificationProcess ? typeof(SystemSprayHumidifier) : typeof(SystemSteamHumidifier);
             }
 
             if (mollierProcess is MixingProcess)
