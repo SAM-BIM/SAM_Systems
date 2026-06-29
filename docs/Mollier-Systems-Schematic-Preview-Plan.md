@@ -53,37 +53,57 @@ maps ~70 component types → `SystemGeometrySymbol` (each symbol carries its
 
 ### Coverage vs. what the bridge emits
 
-The bridge maps Mollier processes to exactly six component types
-(`Create.SystemComponent`):
+The bridge maps Mollier processes to component types (`Create.SystemComponent`).
+`SystemHumidifier` is being made **abstract** (see below), so the
+`HumidificationProcess` branch must emit a concrete subtype — each of which
+already has a symbol:
 
-| Mollier process        | Component           | In symbol library? |
-|------------------------|---------------------|--------------------|
-| `FanProcess`           | `SystemFan`         | ✅ yes |
-| `HeatingProcess`       | `SystemHeatingCoil` | ✅ yes |
-| `CoolingProcess`       | `SystemCoolingCoil` | ✅ yes |
-| `HeatRecoveryProcess`  | `SystemExchanger`   | ✅ yes |
-| `MixingProcess`        | `SystemAirJunction` | ✅ yes |
-| `HumidificationProcess`| `SystemHumidifier`  | ❌ **missing** |
+| Mollier process                 | Component (target)        | In symbol library? |
+|---------------------------------|---------------------------|--------------------|
+| `FanProcess`                    | `SystemFan`               | ✅ yes |
+| `HeatingProcess`                | `SystemHeatingCoil`       | ✅ yes |
+| `CoolingProcess`                | `SystemCoolingCoil`       | ✅ yes |
+| `HeatRecoveryProcess`           | `SystemExchanger`         | ✅ yes |
+| `MixingProcess`                 | `SystemAirJunction`       | ✅ yes |
+| `AdiabaticHumidificationProcess`| `SystemSprayHumidifier`   | ✅ yes |
+| `IsothermalHumidificationProcess` / `SteamHumidificationProcess` | `SystemSteamHumidifier` | ✅ yes |
+| (`SystemDirectEvaporativeCooler`) | — adiabatic alternative | ✅ yes |
 
-**The twin-wheel example uses only the first four + junction → it will preview
-fully.**
+**With the abstract refactor + subtype mapping, coverage is 6/6 (no missing
+symbols).** The twin-wheel example uses only the first five, so it previews
+fully regardless.
 
-### Gap to close (one item — please add the symbol)
+### Refactor: make `SystemHumidifier` abstract
 
-`SystemHumidifier` (the base type returned for `HumidificationProcess`) is
-missing in **two** places:
+`SystemHumidifier` (`SAM.Analytical.Systems/Classes/SystemComponent/SystemHumidifier.cs`)
+is currently a **concrete** `SystemComponent, IAirSystemComponent`. It should be
+the abstract base for its three concrete subtypes, which all already exist with
+their own symbols and `Duplicate` overrides:
 
-1. `SAM_DisplaySystemManager.JSON` — only `SystemSteamHumidifier` and
-   `SystemSprayHumidifier` have symbols, not base `SystemHumidifier`.
-2. `Create.DisplayObject<T>`
-   (`SAM.Analytical.Systems/Create/DisplayObject.cs`) — the `if/else` handles
-   `SystemSteamHumidifier`/`SystemSprayHumidifier` but has no branch for base
-   `SystemHumidifier`.
+- `SystemDirectEvaporativeCooler : SystemHumidifier, IAirSystemComponent`
+- `SystemSprayHumidifier : SystemHumidifier`
+- `SystemSteamHumidifier : SystemHumidifier`
 
-**Action needed:** add a `SystemHumidifier` symbol to the library (or decide the
-bridge should emit `SystemSteamHumidifier` instead of the base type). Until then,
-a humidification step is skipped-and-reported rather than drawn — the twin-wheel
-example is unaffected.
+Ripple of making the base abstract:
+
+1. **`SystemHumidifier.cs`** — `public abstract class`; make its constructors
+   `protected`; remove the base `Duplicate` override (line 90) that does
+   `new SystemHumidifier(...)` (or mark it `abstract`). The three subtypes
+   already override `Duplicate`, so this is safe.
+2. **Bridge `Create.SystemComponent`** (`SystemComponent.cs:120-123`) — replace
+   `new SystemHumidifier("Humidifier")` with the concrete subtype chosen by the
+   `HumidificationProcess` subtype (table above). `AdiabaticHumidificationProcess`
+   → `SystemSprayHumidifier`; `IsothermalHumidificationProcess` (incl.
+   `SteamHumidificationProcess`) → `SystemSteamHumidifier`.
+3. **`Query.SystemComponentType`** (`SystemComponentType.cs:47-50`) — currently
+   returns `typeof(SystemHumidifier)`; return the matching concrete type instead,
+   so the symbol-manager lookup resolves to a real (non-abstract) symbol.
+4. **`Create.DisplayObject<T>`** — already has branches for all three concrete
+   subtypes and **no** base-`SystemHumidifier` branch, so it is already correct
+   for an abstract base; no change needed.
+
+No JSON resource change is required: all three concrete humidifier symbols are
+already present in `SAM_DisplaySystemManager.JSON`.
 
 ## Plan
 
@@ -150,17 +170,24 @@ New file `SAM.Analytical.Systems/Create/DisplaySystemEnergyCentre.cs`:
 |------|------|--------|
 | `SAM.Analytical.Systems` | `Create/DisplaySystemEnergyCentre.cs` | **new** converter |
 | `SAM.Analytical.Systems` | `Query/DefaultDisplaySystemManager.cs` | **new** loader/cache |
-| `SAM.Analytical.Systems` | `Create/DisplayObject.cs` | add `SystemHumidifier` branch (gap) |
+| `SAM.Analytical.Systems` | `Classes/SystemComponent/SystemHumidifier.cs` | make **abstract**; protected ctors; drop base `Duplicate` |
+| `SAM.Analytical.Systems.Mollier` | `Create/SystemComponent.cs` | map `HumidificationProcess` subtype → concrete humidifier |
+| `SAM.Analytical.Systems.Mollier` | `Query/SystemComponentType.cs` | return concrete humidifier type (not abstract base) |
 | `SAM.Geometry.Systems` | `Classes/DisplaySystemPlantRoom.cs` | implement `CreateSystemConnection` |
 | `SAM.Analytical.Systems.Mollier` | `Example/TwinWheelExample.cs` | optional display output + checks |
 | Grasshopper | `Component/SAMSystemsCreateDisplaySystemEnergyCentre.cs` | **new** node |
 | Grasshopper | `Component/SAMSystemsMollierTwinWheelExample.cs` | `_display_` input + display output |
-| resources | `SAM_DisplaySystemManager.JSON` | add `SystemHumidifier` symbol (gap) |
+
+`Create/DisplayObject.cs` needs **no** change — it already handles all three
+concrete humidifier subtypes and no base type. No resource change either: all
+three humidifier symbols already exist in `SAM_DisplaySystemManager.JSON`.
 
 ## Risks
 
-- **`SystemHumidifier` gap** — see above; needs a symbol added (or bridge emits a
-  concrete humidifier subtype). Twin-wheel example unaffected.
+- **`SystemHumidifier` → abstract** — verify nothing else instantiates the base
+  type or relies on it being concrete (deserialization registration, any
+  reflection/`Activator` paths). Only known callers are its own `Duplicate` and
+  the bridge factory, both updated above.
 - **Twin-wheel shared exchanger** placement spanning two rows is the trickiest
   geometry: both air-path connectors must route cleanly off the single device.
 - **Connector metadata** on auto-built display objects must carry the right
