@@ -226,9 +226,23 @@ The merged air side is also translated to sit clear of the template's plant
 display extent (left edges aligned, with a margin), so the two schematics do not
 overlap at the origin. This is geometry-only; the logical model is untouched.
 
+## Outside-air junctions
+
+The bridge caps the two outside-air boundaries of the generated air-handling
+plant room with explicit air junctions so no air path is left dangling:
+
+- `Junction Fresh Air` on the supply intake (the supply system's open In),
+  wired `junction.Out -> component.In`.
+- `Junction Exhaust Air` on the extract discharge (the extract system's open
+  Out), wired `component.Out -> junction.In` - only when an extract chain is
+  present.
+
+The room-side connectors (supply -> room, room -> extract) are left open on
+purpose. Connector indexes follow the `SystemJunction` layout (In = 0, Out = 1),
+matching the reference HeatRecovery-Junctions plant room.
+
 Still open (need a Grasshopper viewport to verify and a maintainer design
-decision): `Junction Fresh Air` / `Junction Exhaust Air` insertion for
-otherwise-disconnected paths; a `DisplayAirSystemGroup` per case; the second
+decision): a `DisplayAirSystemGroup` per case (room-side grouping); the second
 heat-recovery offset; and the `CreateAirSystemByMollier` rename with an
 `AirSystem`-typed output (an `AirSystem` is a logical grouping and does not by
 itself carry its components, so a carrier object/decision is needed).
