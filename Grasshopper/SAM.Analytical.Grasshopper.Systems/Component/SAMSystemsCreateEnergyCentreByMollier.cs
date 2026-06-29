@@ -78,6 +78,7 @@ namespace SAM.Analytical.Grasshopper.Systems
                 result.Add(new GH_SAMParam(new GooMollierProcessParam() { Name = "_extractMollierProcesses_", NickName = "_extractMollierProcesses_", Description = "Optional ordered extract-side chain of SAM Mollier processes (room air -> heat recovery -> extract fan).\n\nWhen supplied, a heat-recovery exchanger that appears in both the supply and extract chains is created once and shared across both air paths (supply on air path 1, extract on air path 2) - i.e. a twin-wheel / run-around unit modelled as a single device. Multiple recovery devices are paired between the chains in order.\n\nLeave empty for a supply-only air handling unit.", Access = GH_ParamAccess.list, Optional = true }, ParamVisibility.Voluntary));
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Number() { Name = "_extractAirflow_", NickName = "_extractAirflow_", Description = "Design extract volumetric airflow in cubic metres per second [m3/s], used to size the duties of the extract-side components. Only relevant when an extract chain is supplied.\n\nLeave empty to omit extract-side duties.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_name_", NickName = "_name_", Description = "Name for the created SystemEnergyCentre.\n\nDefaults to \"Energy Centre\" when left empty.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_plantRoomTemplate_", NickName = "_plantRoomTemplate_", Description = "Optional path to an energy-centre / plant-room template JSON file (for example Plantroom-Only.json).\n\nWhen supplied, the air systems created from the Mollier processes are added into this template's plant room, so the result combines the new air side with the template's existing liquid systems, energy sources and plant equipment - producing a simulation-ready SystemEnergyCentre rather than an air-only one.\n\nLeave empty to build the air side on its own.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
                 return result.ToArray();
             }
         }
@@ -134,14 +135,31 @@ namespace SAM.Analytical.Grasshopper.Systems
 
             string energyCentreName = string.IsNullOrWhiteSpace(name) ? "Energy Centre" : name;
 
+            string plantRoomTemplatePath = null;
+            index = Params.IndexOfInputParam("_plantRoomTemplate_");
+            if (index != -1)
+            {
+                dataAccess.GetData(index, ref plantRoomTemplatePath);
+            }
+
+            SystemEnergyCentre plantRoomTemplate = null;
+            if (!string.IsNullOrWhiteSpace(plantRoomTemplatePath))
+            {
+                plantRoomTemplate = SAM.Analytical.Systems.Query.SystemEnergyCentre(plantRoomTemplatePath);
+                if (plantRoomTemplate == null)
+                {
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Could not load a SystemEnergyCentre from the supplied plant-room template path; building the air side on its own.");
+                }
+            }
+
             SystemEnergyCentre systemEnergyCentre;
             if (extractMollierProcesses != null && extractMollierProcesses.Count != 0)
             {
-                systemEnergyCentre = SAM.Analytical.Systems.Mollier.Create.SystemEnergyCentre(supplyMollierProcesses, extractMollierProcesses, supplyAirflow, extractAirflow, energyCentreName);
+                systemEnergyCentre = SAM.Analytical.Systems.Mollier.Create.SystemEnergyCentre(supplyMollierProcesses, extractMollierProcesses, supplyAirflow, extractAirflow, energyCentreName, plantRoomTemplate);
             }
             else
             {
-                systemEnergyCentre = SAM.Analytical.Systems.Mollier.Create.SystemEnergyCentre(supplyMollierProcesses, supplyAirflow, energyCentreName);
+                systemEnergyCentre = SAM.Analytical.Systems.Mollier.Create.SystemEnergyCentre(supplyMollierProcesses, supplyAirflow, energyCentreName, plantRoomTemplate);
             }
 
             if (systemEnergyCentre == null)

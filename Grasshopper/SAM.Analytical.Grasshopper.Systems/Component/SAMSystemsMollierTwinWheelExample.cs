@@ -57,6 +57,7 @@ namespace SAM.Analytical.Grasshopper.Systems
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_run_", NickName = "_run_", Description = "Set to true to build the example twin-wheel system and run the self-check.\n\nDefaults to true.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Binding));
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Number() { Name = "_supplyAirflow_", NickName = "_supplyAirflow_", Description = "Design supply volumetric airflow [m3/s] used to size the example component duties.\n\nDefaults to 2.5 m3/s.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
                 result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_Number() { Name = "_extractAirflow_", NickName = "_extractAirflow_", Description = "Design extract volumetric airflow [m3/s] used to size the example extract-side duties.\n\nDefaults to 2.3 m3/s.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_plantRoomTemplate_", NickName = "_plantRoomTemplate_", Description = "Optional path to an energy-centre / plant-room template JSON file (for example Plantroom-Only.json).\n\nWhen supplied, the example air systems are added into this template's plant room so the result keeps the template's liquid systems, energy sources and plant equipment and is simulation-ready.\n\nLeave empty to use the bundled Plantroom-Only.json template when available, or - failing that - to build the air side on its own.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
                 return result.ToArray();
             }
         }
@@ -105,7 +106,26 @@ namespace SAM.Analytical.Grasshopper.Systems
                 dataAccess.GetData(index, ref extractAirflow);
             }
 
-            SystemEnergyCentre systemEnergyCentre = SAM.Analytical.Systems.Mollier.TwinWheelExample.Create(supplyAirflow, extractAirflow);
+            string plantRoomTemplatePath = null;
+            index = Params.IndexOfInputParam("_plantRoomTemplate_");
+            if (index != -1)
+            {
+                dataAccess.GetData(index, ref plantRoomTemplatePath);
+            }
+
+            // Resolve the plant-room template: an explicit path wins; otherwise fall back to the bundled
+            // Plantroom-Only.json so the example is simulation-ready out of the box. A null template degrades to
+            // building the air side on its own.
+            SystemEnergyCentre plantRoomTemplate = string.IsNullOrWhiteSpace(plantRoomTemplatePath)
+                ? SAM.Analytical.Systems.Query.SystemEnergyCentre_FromResources("Plantroom-Only.json")
+                : SAM.Analytical.Systems.Query.SystemEnergyCentre(plantRoomTemplatePath);
+
+            if (!string.IsNullOrWhiteSpace(plantRoomTemplatePath) && plantRoomTemplate == null)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Could not load a SystemEnergyCentre from the supplied plant-room template path; building the air side on its own.");
+            }
+
+            SystemEnergyCentre systemEnergyCentre = SAM.Analytical.Systems.Mollier.TwinWheelExample.Create(supplyAirflow, extractAirflow, plantRoomTemplate);
             bool success = SAM.Analytical.Systems.Mollier.TwinWheelExample.Verify(out List<string> messages);
 
             if (!success)

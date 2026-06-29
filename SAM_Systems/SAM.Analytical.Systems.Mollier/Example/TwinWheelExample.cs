@@ -67,6 +67,20 @@ namespace SAM.Analytical.Systems.Mollier
         }
 
         /// <summary>
+        /// Builds the twin-wheel <see cref="SystemEnergyCentre"/> on top of an existing plant-room
+        /// <paramref name="template"/> (for example Plantroom-Only.json): the Mollier-derived air systems are added
+        /// into the template's plant room so the result keeps the template's liquid systems, energy sources and
+        /// plant equipment and is simulation-ready. When <paramref name="template"/> is null this is equivalent to
+        /// <see cref="Create(double, double)"/>.
+        /// </summary>
+        public static SystemEnergyCentre Create(double supplyAirflow, double extractAirflow, SystemEnergyCentre template)
+        {
+            MollierProcesses(out List<IMollierProcess> supplyMollierProcesses, out List<IMollierProcess> extractMollierProcesses);
+
+            return SAM.Analytical.Systems.Mollier.Create.SystemEnergyCentre(supplyMollierProcesses, extractMollierProcesses, supplyAirflow, extractAirflow, "Twin-Wheel AHU", template);
+        }
+
+        /// <summary>
         /// Runs deterministic checks over the generated twin-wheel system and reports the outcome.
         /// </summary>
         /// <param name="messages">One PASS/FAIL line per check.</param>
