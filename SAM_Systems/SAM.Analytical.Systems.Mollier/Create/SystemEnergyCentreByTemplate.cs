@@ -3,6 +3,8 @@
 using System.Collections.Generic;
 using SAM.Core.Mollier;
 using SAM.Core.Systems;
+using SAM.Geometry.Planar;
+using SAM.Geometry.Systems;
 
 namespace SAM.Analytical.Systems.Mollier
 {
@@ -84,6 +86,11 @@ namespace SAM.Analytical.Systems.Mollier
                 return result;
             }
 
+            // Place the air side clear of the template's existing plant so the two schematics do not overlap in
+            // the viewport (the bridge lays the air side out from the origin, which is where the template plant
+            // also sits). Only applies when both carry display geometry; otherwise the layout is left untouched.
+            OffsetAirSideClearOfTemplate(targetSystemPlantRoom, airSystemPlantRoom);
+
             // CopyFrom transitively copies the seed object and its whole related sub-graph, so seeding from each
             // air system Guid pulls in that system together with its components and connections.
             List<ISystem> systems = airSystemPlantRoom.GetSystems();
@@ -101,6 +108,86 @@ namespace SAM.Analytical.Systems.Mollier
             result.Add(targetSystemPlantRoom);
 
             return result;
+        }
+
+        // Vertical gap (in symbol units) left between the template plant and the air side placed above it.
+        private const double TemplateAirSideMargin = 2.0;
+
+        /// <summary>
+        /// Translates every display object of <paramref name="airSystemPlantRoom"/> so its laid-out schematic sits
+        /// directly above the display extent of <paramref name="templateSystemPlantRoom"/> (left edges aligned),
+        /// leaving a clear margin. No-ops when either side has no display geometry, so the logical fallback is
+        /// untouched.
+        /// </summary>
+        private static void OffsetAirSideClearOfTemplate(SystemPlantRoom templateSystemPlantRoom, SystemPlantRoom airSystemPlantRoom)
+        {
+            BoundingBox2D templateBoundingBox2D = DisplayBoundingBox2D(templateSystemPlantRoom);
+            BoundingBox2D airBoundingBox2D = DisplayBoundingBox2D(airSystemPlantRoom);
+            if (templateBoundingBox2D == null || airBoundingBox2D == null)
+            {
+                return;
+            }
+
+            double offsetX = templateBoundingBox2D.Min.X - airBoundingBox2D.Min.X;
+            double offsetY = (templateBoundingBox2D.Max.Y + TemplateAirSideMargin) - airBoundingBox2D.Min.Y;
+
+            OffsetDisplayObjects(airSystemPlantRoom, new Vector2D(offsetX, offsetY));
+        }
+
+        /// <summary>
+        /// Returns the combined 2D extent of every display object (components and connections) held by
+        /// <paramref name="systemPlantRoom"/>, or null when none carry display geometry.
+        /// </summary>
+        private static BoundingBox2D DisplayBoundingBox2D(SystemPlantRoom systemPlantRoom)
+        {
+            List<ISystemComponent> systemComponents = systemPlantRoom?.GetSystemComponents<ISystemComponent>();
+            if (systemComponents == null)
+            {
+                return null;
+            }
+
+            List<BoundingBox2D> boundingBox2Ds = new List<BoundingBox2D>();
+            foreach (ISystemComponent systemComponent in systemComponents)
+            {
+                if (systemComponent is IDisplaySystemObject displaySystemObject)
+                {
+                    BoundingBox2D boundingBox2D = displaySystemObject.BoundingBox2D;
+                    if (boundingBox2D != null)
+                    {
+                        boundingBox2Ds.Add(boundingBox2D);
+                    }
+                }
+            }
+
+            return boundingBox2Ds.Count == 0 ? null : new BoundingBox2D(boundingBox2Ds);
+        }
+
+        /// <summary>
+        /// Moves every display object (components and connections) of <paramref name="systemPlantRoom"/> by
+        /// <paramref name="vector2D"/>, persisting each moved object by re-adding it under its existing Guid so all
+        /// relations are preserved (ISystemConnection is an ISystemComponent, so connections move with their
+        /// components).
+        /// </summary>
+        private static void OffsetDisplayObjects(SystemPlantRoom systemPlantRoom, Vector2D vector2D)
+        {
+            if (systemPlantRoom == null || vector2D == null)
+            {
+                return;
+            }
+
+            List<ISystemComponent> systemComponents = systemPlantRoom.GetSystemComponents<ISystemComponent>();
+            if (systemComponents == null)
+            {
+                return;
+            }
+
+            foreach (ISystemComponent systemComponent in systemComponents)
+            {
+                if (systemComponent is IDisplaySystemObject displaySystemObject && displaySystemObject.Move(vector2D))
+                {
+                    systemPlantRoom.Add(systemComponent);
+                }
+            }
         }
     }
 }
