@@ -153,6 +153,22 @@ namespace SAM.Analytical.Systems
                 }
             }
 
+            // Seed the plant room with its air systems and converted components before any Connect call:
+            // SystemPlantRoom.Connect dereferences the relation cluster (Contains) before lazily creating it, so
+            // the cluster must already exist (Add creates it). Adding here also registers each object by Guid.
+            if (systems != null)
+            {
+                foreach (ISystem system in systems)
+                {
+                    result.Add(system);
+                }
+            }
+
+            foreach (ISystemComponent displaySystemComponent in dictionary.Values)
+            {
+                result.Add(displaySystemComponent);
+            }
+
             // 2. Re-create each logical connection as a routed display connection between the converted components.
             //    Membership is tracked per (air system, component) pair - not globally - so a component shared
             //    across air systems (e.g. a twin-wheel exchanger) is still related to every system it belongs to.
