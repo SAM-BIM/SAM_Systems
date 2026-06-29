@@ -39,6 +39,10 @@ namespace SAM.Analytical.Systems.Mollier
                 return null;
             }
 
+            // Cap the supply intake with an explicit fresh-air junction so the outside-air boundary is not left
+            // dangling. A supply-only chain has no extract discharge, so no exhaust junction is added.
+            AddOutsideAirJunctions(systemPlantRoom, airSystemName, null);
+
             // Promote to a drawable display plant room (falls back to logical when no symbol library is present).
             return ToDisplaySystemPlantRoom(systemPlantRoom);
         }

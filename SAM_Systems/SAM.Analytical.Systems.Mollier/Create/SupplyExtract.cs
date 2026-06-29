@@ -54,6 +54,10 @@ namespace SAM.Analytical.Systems.Mollier
                 return null;
             }
 
+            // Cap the outside-air boundaries with explicit junctions (fresh air on the supply intake, exhaust air
+            // on the extract discharge) so no air path is left dangling at an outside-air condition.
+            AddOutsideAirJunctions(systemPlantRoom, "Supply Air System", "Extract Air System");
+
             // Promote the logical plant room to a display (drawable) plant room so the bridge output can be
             // previewed/baked directly: each component becomes its DisplaySystem* equivalent (symbol + auto
             // layout) and each connection a routed polyline. Falls back to the logical room if no symbol library
