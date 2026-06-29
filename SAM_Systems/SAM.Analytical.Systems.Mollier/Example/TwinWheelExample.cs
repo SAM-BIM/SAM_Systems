@@ -154,6 +154,21 @@ namespace SAM.Analytical.Systems.Mollier
                 Check(ref result, messages, !double.IsNaN(latentEfficiency) && latentEfficiency >= 0 && latentEfficiency <= 1, $"Latent recovery effectiveness within [0,1] (got {latentEfficiency:0.###})");
             }
 
+            // Outside-air junctions: the bridge caps the supply intake and the extract discharge so neither air
+            // path is left dangling at an outside-air condition, and each junction is wired into its chain.
+            SystemPlantRoom junctionPlantRoom = systemPlantRooms?.FirstOrDefault();
+            List<SystemAirJunction> systemAirJunctions = junctionPlantRoom?.GetSystemComponents<SystemAirJunction>() ?? new List<SystemAirJunction>();
+            SystemAirJunction freshAirJunction = systemAirJunctions.Find(x => x?.Name == "Junction Fresh Air");
+            SystemAirJunction exhaustAirJunction = systemAirJunctions.Find(x => x?.Name == "Junction Exhaust Air");
+
+            Check(ref result, messages, freshAirJunction != null, "Fresh-air junction added at the supply intake");
+            Check(ref result, messages, exhaustAirJunction != null, "Exhaust-air junction added at the extract discharge");
+
+            bool freshAirJunctionConnected = freshAirJunction != null && (junctionPlantRoom.GetRelatedObjects<ISystemConnection>(freshAirJunction)?.Count ?? 0) > 0;
+            bool exhaustAirJunctionConnected = exhaustAirJunction != null && (junctionPlantRoom.GetRelatedObjects<ISystemConnection>(exhaustAirJunction)?.Count ?? 0) > 0;
+            Check(ref result, messages, freshAirJunctionConnected, "Fresh-air junction is wired into the supply chain");
+            Check(ref result, messages, exhaustAirJunctionConnected, "Exhaust-air junction is wired into the extract chain");
+
             // The chain must be followable in the airflow (Out) direction: components have to be wired
             // previous.Out -> current.In, not In -> Out. GetOrderedSystemComponents excludes the start, so the
             // supply chain (HR -> cooling -> reheat -> fan) walks 3 downstream hops in the Out direction; the
