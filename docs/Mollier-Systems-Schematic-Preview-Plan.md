@@ -222,11 +222,14 @@ can now seed the result from an existing `SystemEnergyCentre`:
   `_plantRoomTemplate_` file-path input; the example defaults to the bundled
   `Plantroom-Only.json` when no path is given.
 
+The merged air side is also translated to sit clear of the template's plant
+display extent (left edges aligned, with a margin), so the two schematics do not
+overlap at the origin. This is geometry-only; the logical model is untouched.
+
 Still open (need a Grasshopper viewport to verify and a maintainer design
-decision): the air/plant **layout offset** so the merged air side does not
-overlap the template plant; `Junction Fresh Air` / `Junction Exhaust Air`
-insertion for otherwise-disconnected paths; a `DisplayAirSystemGroup` per case;
-the second heat-recovery offset; and the `CreateAirSystemByMollier` rename with an
+decision): `Junction Fresh Air` / `Junction Exhaust Air` insertion for
+otherwise-disconnected paths; a `DisplayAirSystemGroup` per case; the second
+heat-recovery offset; and the `CreateAirSystemByMollier` rename with an
 `AirSystem`-typed output (an `AirSystem` is a logical grouping and does not by
 itself carry its components, so a carrier object/decision is needed).
 
