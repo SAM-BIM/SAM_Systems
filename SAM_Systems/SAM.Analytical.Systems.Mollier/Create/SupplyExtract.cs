@@ -46,11 +46,11 @@ namespace SAM.Analytical.Systems.Mollier
 
             // Supply chain.
             List<SystemExchanger> supplyExchangers = new List<SystemExchanger>();
-            int supplyCount = AddChain(systemPlantRoom, supplyMollierProcesses, designSupplyAirflow, airSystem, null, supplyExchangers, out ISystemComponent supplyFirst, out ISystemComponent _);
+            int supplyCount = AddChain(systemPlantRoom, supplyMollierProcesses, designSupplyAirflow, airSystem, null, supplyExchangers, out ISystemComponent supplyFirst, out ISystemComponent supplyLast);
 
             // Extract chain on the same air system, reusing the supply-side exchangers (in order) so a twin-wheel is
             // one device.
-            int extractCount = AddChain(systemPlantRoom, extractMollierProcesses, designExtractAirflow, airSystem, supplyExchangers, null, out ISystemComponent _, out ISystemComponent extractLast);
+            int extractCount = AddChain(systemPlantRoom, extractMollierProcesses, designExtractAirflow, airSystem, supplyExchangers, null, out ISystemComponent extractFirst, out ISystemComponent extractLast);
 
             // With both air paths known, derive each shared exchanger's sensible/latent effectiveness.
             ApplyHeatRecoveryEfficiencies(systemPlantRoom, supplyMollierProcesses, extractMollierProcesses, supplyExchangers);
@@ -66,12 +66,24 @@ namespace SAM.Analytical.Systems.Mollier
             AddBoundaryJunction(systemPlantRoom, airSystem, supplyFirst, SAM.Core.Direction.In, "Junction Fresh Air");
             AddBoundaryJunction(systemPlantRoom, airSystem, extractLast, SAM.Core.Direction.Out, "Junction Exhaust Air");
 
+            // Room-side arrangement: close the loop supply discharge -> Group Junction -> Damper -> Room -> Group
+            // Junction -> extract intake. The room condition is the start (room-side) point of the extract chain.
+            if (supplyLast != null && extractFirst != null)
+            {
+                AddRoom(systemPlantRoom, airSystem, supplyLast, extractFirst, FirstStart(extractMollierProcesses));
+            }
+
             // Promote the logical plant room to a display (drawable) plant room so the bridge output can be
             // previewed/baked directly: each component becomes its DisplaySystem* equivalent (symbol + auto
             // layout) and each connection a routed polyline. Falls back to the logical room if no symbol library
             // is available. DisplaySystem* are subclasses of their System* types, so simulation/export is
             // unaffected.
-            return ToDisplaySystemPlantRoom(systemPlantRoom);
+            SystemPlantRoom displaySystemPlantRoom = ToDisplaySystemPlantRoom(systemPlantRoom);
+
+            // Wrap the laid-out room-side items (Room, Damper, Group Junctions) in a DisplayAirSystemGroup.
+            AddDisplayAirSystemGroup(displaySystemPlantRoom, airSystem);
+
+            return displaySystemPlantRoom;
         }
 
         /// <summary>

@@ -169,6 +169,16 @@ namespace SAM.Analytical.Systems.Mollier
             Check(ref result, messages, freshAirJunctionConnected, "Fresh-air junction is wired into the supply chain");
             Check(ref result, messages, exhaustAirJunctionConnected, "Exhaust-air junction is wired into the extract chain");
 
+            // Room-side arrangement: the room condition is materialised as a Space, fed through a Damper, closing
+            // the loop between supply discharge and extract intake.
+            SystemSpace room = junctionPlantRoom?.GetSystemComponents<SystemSpace>()?.FirstOrDefault();
+            SystemDamper roomDamper = junctionPlantRoom?.GetSystemComponents<SystemDamper>()?.FirstOrDefault();
+            Check(ref result, messages, room != null, "Room (Space) added for the room condition");
+            Check(ref result, messages, roomDamper != null, "Damper added on the room supply side");
+
+            bool singleAirSystem = junctionPlantRoom != null && (junctionPlantRoom.GetSystems<AirSystem>()?.Count ?? 0) == 1;
+            Check(ref result, messages, singleAirSystem, "Supply and extract share a single air system");
+
             // The chain must be followable in the airflow (Out) direction: components have to be wired
             // previous.Out -> current.In, not In -> Out. GetOrderedSystemComponents excludes the start, so the
             // supply chain (HR -> cooling -> reheat -> fan) walks 3 downstream hops in the Out direction; the
@@ -224,6 +234,10 @@ namespace SAM.Analytical.Systems.Mollier
 
                     bool connectionsDrawable = displayConnections.Count != 0 && displayConnections.TrueForAll(x => x is IDisplaySystemObject && SAM.Analytical.Systems.Query.SAMGeometry2Dobject((IDisplaySystemObject)x) != null);
                     Check(ref result, messages, connectionsDrawable, $"Every connection is a drawable display polyline ({displayConnections.Count})");
+
+                    // The room-side items are wrapped in a DisplayAirSystemGroup (created once the room is laid out).
+                    bool hasDisplayAirSystemGroup = (displaySystemPlantRoom.GetSystemGroups<DisplayAirSystemGroup>()?.Count ?? 0) > 0;
+                    Check(ref result, messages, hasDisplayAirSystemGroup, "Room-side items wrapped in a DisplayAirSystemGroup");
                 }
             }
 
