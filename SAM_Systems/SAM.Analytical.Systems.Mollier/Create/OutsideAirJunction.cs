@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
-using System.Collections.Generic;
 using SAM.Core.Systems;
 
 namespace SAM.Analytical.Systems.Mollier
@@ -15,62 +14,26 @@ namespace SAM.Analytical.Systems.Mollier
         private const int JunctionOutIndex = 1;
 
         /// <summary>
-        /// Caps the open outside-air boundaries of an air-handling plant room with explicit air junctions so no air
-        /// path is left dangling at an outside-air condition: a "Junction Fresh Air" feeds the supply intake (the
-        /// supply system's open In), and - when an extract system is present - a "Junction Exhaust Air" terminates
-        /// the extract discharge (the extract system's open Out).
+        /// Caps an open outside-air boundary of the air system with an explicit <see cref="SystemAirJunction"/> so
+        /// the air path is not left dangling: a fresh-air junction feeds an open In (the supply intake), and an
+        /// exhaust-air junction terminates an open Out (the extract discharge).
         /// </summary>
         /// <remarks>
-        /// Only the two outside-air connectors are capped. The supply discharge (supply -> room) and the extract
-        /// intake (room -> extract) are left open on purpose: they are room-side, not outside-air, boundaries.
-        /// In Mollier diagrams the outside air condition is shown but the full extract-to-exhaust path often is not;
-        /// adding the junctions keeps the system definition complete even when the chart does not draw it.
+        /// Because supply and extract share a single air system, the specific boundary component is passed in (the
+        /// first supply component for the intake, the last extract component for the discharge) rather than found by
+        /// an ambiguous open-connector query. The room-side boundaries (supply discharge, extract intake) are left
+        /// open on purpose. Does nothing when the boundary component is already a junction or has no open connector
+        /// in the requested direction.
         /// </remarks>
-        private static void AddOutsideAirJunctions(SystemPlantRoom systemPlantRoom, string supplyAirSystemName, string extractAirSystemName)
+        private static void AddBoundaryJunction(SystemPlantRoom systemPlantRoom, AirSystem airSystem, ISystemComponent boundaryComponent, SAM.Core.Direction boundaryDirection, string junctionName)
         {
-            if (systemPlantRoom == null)
-            {
-                return;
-            }
-
-            AddBoundaryJunction(systemPlantRoom, supplyAirSystemName, SAM.Core.Direction.In, "Junction Fresh Air");
-
-            if (!string.IsNullOrWhiteSpace(extractAirSystemName))
-            {
-                AddBoundaryJunction(systemPlantRoom, extractAirSystemName, SAM.Core.Direction.Out, "Junction Exhaust Air");
-            }
-        }
-
-        /// <summary>
-        /// Adds a single boundary <see cref="SystemAirJunction"/> at the open <paramref name="boundaryDirection"/>
-        /// connector of the named air system (the chain head for In, the chain tail for Out), unless that boundary
-        /// component is already a junction.
-        /// </summary>
-        private static void AddBoundaryJunction(SystemPlantRoom systemPlantRoom, string airSystemName, SAM.Core.Direction boundaryDirection, string junctionName)
-        {
-            if (systemPlantRoom == null || string.IsNullOrWhiteSpace(airSystemName))
-            {
-                return;
-            }
-
-            AirSystem airSystem = systemPlantRoom.GetSystem<AirSystem>(x => x.Name == airSystemName);
-            if (airSystem == null)
+            if (systemPlantRoom == null || airSystem == null || boundaryComponent == null || boundaryComponent is ISystemConnection || boundaryComponent is SystemAirJunction)
             {
                 return;
             }
 
             SystemType systemType = new SystemType(airSystem);
 
-            // The boundary component carries an open connector in the boundary direction (the supply intake has an
-            // open In; the extract discharge an open Out). A linear chain has exactly one such component.
-            List<ISystemComponent> boundaryComponents = systemPlantRoom.GetSystemComponents<ISystemComponent>(airSystem, ConnectorStatus.Unconnected, boundaryDirection);
-            boundaryComponents?.RemoveAll(x => x is ISystemConnection || x is SystemAirJunction);
-            if (boundaryComponents == null || boundaryComponents.Count == 0)
-            {
-                return;
-            }
-
-            ISystemComponent boundaryComponent = boundaryComponents[0];
             int boundaryIndex = UnconnectedIndex(systemPlantRoom, boundaryComponent, systemType, boundaryDirection);
             if (boundaryIndex == -1)
             {

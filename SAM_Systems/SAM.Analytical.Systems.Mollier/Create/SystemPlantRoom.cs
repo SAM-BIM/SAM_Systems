@@ -31,8 +31,11 @@ namespace SAM.Analytical.Systems.Mollier
 
             SystemPlantRoom systemPlantRoom = new SystemPlantRoom(name);
 
+            AirSystem airSystem = new AirSystem(airSystemName);
+            systemPlantRoom.Add(airSystem);
+
             // Single supply chain: no exchanger reuse, no exchanger collection needed.
-            int count = AddChain(systemPlantRoom, mollierProcesses, designAirflow, airSystemName, null, null);
+            int count = AddChain(systemPlantRoom, mollierProcesses, designAirflow, airSystem, null, null, out ISystemComponent firstComponent, out ISystemComponent _);
 
             if (count == 0)
             {
@@ -41,7 +44,7 @@ namespace SAM.Analytical.Systems.Mollier
 
             // Cap the supply intake with an explicit fresh-air junction so the outside-air boundary is not left
             // dangling. A supply-only chain has no extract discharge, so no exhaust junction is added.
-            AddOutsideAirJunctions(systemPlantRoom, airSystemName, null);
+            AddBoundaryJunction(systemPlantRoom, airSystem, firstComponent, SAM.Core.Direction.In, "Junction Fresh Air");
 
             // Promote to a drawable display plant room (falls back to logical when no symbol library is present).
             return ToDisplaySystemPlantRoom(systemPlantRoom);

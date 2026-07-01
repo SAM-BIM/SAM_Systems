@@ -39,12 +39,18 @@ namespace SAM.Analytical.Systems.Mollier
 
             SystemPlantRoom systemPlantRoom = new SystemPlantRoom(name);
 
+            // Supply and extract streams belong to a single air system (both sides of one AHU), not two separate
+            // air systems.
+            AirSystem airSystem = new AirSystem("Air System");
+            systemPlantRoom.Add(airSystem);
+
             // Supply chain.
             List<SystemExchanger> supplyExchangers = new List<SystemExchanger>();
-            int supplyCount = AddChain(systemPlantRoom, supplyMollierProcesses, designSupplyAirflow, "Supply Air System", null, supplyExchangers);
+            int supplyCount = AddChain(systemPlantRoom, supplyMollierProcesses, designSupplyAirflow, airSystem, null, supplyExchangers, out ISystemComponent supplyFirst, out ISystemComponent _);
 
-            // Extract chain, reusing the supply-side exchangers (in order) so a twin-wheel is one device.
-            int extractCount = AddChain(systemPlantRoom, extractMollierProcesses, designExtractAirflow, "Extract Air System", supplyExchangers, null);
+            // Extract chain on the same air system, reusing the supply-side exchangers (in order) so a twin-wheel is
+            // one device.
+            int extractCount = AddChain(systemPlantRoom, extractMollierProcesses, designExtractAirflow, airSystem, supplyExchangers, null, out ISystemComponent _, out ISystemComponent extractLast);
 
             // With both air paths known, derive each shared exchanger's sensible/latent effectiveness.
             ApplyHeatRecoveryEfficiencies(systemPlantRoom, supplyMollierProcesses, extractMollierProcesses, supplyExchangers);
@@ -54,9 +60,11 @@ namespace SAM.Analytical.Systems.Mollier
                 return null;
             }
 
-            // Cap the outside-air boundaries with explicit junctions (fresh air on the supply intake, exhaust air
-            // on the extract discharge) so no air path is left dangling at an outside-air condition.
-            AddOutsideAirJunctions(systemPlantRoom, "Supply Air System", "Extract Air System");
+            // Cap the outside-air boundaries with explicit junctions: fresh air feeds the supply intake (the first
+            // supply component's open In); exhaust air terminates the extract discharge (the last extract
+            // component's open Out). The room-side boundaries (supply discharge, extract intake) are left open.
+            AddBoundaryJunction(systemPlantRoom, airSystem, supplyFirst, SAM.Core.Direction.In, "Junction Fresh Air");
+            AddBoundaryJunction(systemPlantRoom, airSystem, extractLast, SAM.Core.Direction.Out, "Junction Exhaust Air");
 
             // Promote the logical plant room to a display (drawable) plant room so the bridge output can be
             // previewed/baked directly: each component becomes its DisplaySystem* equivalent (symbol + auto
@@ -112,14 +120,18 @@ namespace SAM.Analytical.Systems.Mollier
         /// instances (in order) instead of creating new ones; when <paramref name="createdExchangers"/> is supplied,
         /// newly created exchangers are appended to it.
         /// </summary>
-        private static int AddChain(SystemPlantRoom systemPlantRoom, IEnumerable<IMollierProcess> mollierProcesses, double designAirflow, string airSystemName, List<SystemExchanger> reusableExchangers, List<SystemExchanger> createdExchangers)
+        private static int AddChain(SystemPlantRoom systemPlantRoom, IEnumerable<IMollierProcess> mollierProcesses, double designAirflow, AirSystem airSystem, List<SystemExchanger> reusableExchangers, List<SystemExchanger> createdExchangers, out ISystemComponent firstComponent, out ISystemComponent lastComponent)
         {
-            if (mollierProcesses == null)
+            firstComponent = null;
+            lastComponent = null;
+
+            if (mollierProcesses == null || airSystem == null)
             {
                 return 0;
             }
 
-            AirSystem airSystem = new AirSystem(airSystemName);
+            // Idempotent: Add stores/replaces by Guid, so re-adding the shared air system on the second chain is a
+            // no-op. Both the supply and extract chains are wired onto this single air system.
             systemPlantRoom.Add(airSystem);
 
             ISystemComponent previous = null;
@@ -182,6 +194,12 @@ namespace SAM.Analytical.Systems.Mollier
                     // plant room.
                     systemPlantRoom.Connect(airSystem, current);
                 }
+
+                if (firstComponent == null)
+                {
+                    firstComponent = current;
+                }
+                lastComponent = current;
 
                 previous = current;
                 count++;
