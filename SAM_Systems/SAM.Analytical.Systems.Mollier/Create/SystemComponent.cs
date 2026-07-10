@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+using System.Collections.Generic;
+using SAM.Core;
 using SAM.Core.Mollier;
 using SAM.Core.Systems;
 
@@ -22,13 +24,27 @@ namespace SAM.Analytical.Systems.Mollier
         /// <returns>An <see cref="ISystemComponent"/>, or null.</returns>
         public static ISystemComponent SystemComponent(this IMollierProcess mollierProcess, double designAirflow = double.NaN)
         {
+            List<ConversionDiagnostic> _;
+            return SystemComponent(mollierProcess, designAirflow, out _);
+        }
+
+        public static ISystemComponent SystemComponent(this IMollierProcess mollierProcess, double designAirflow, out List<ConversionDiagnostic> diagnostics)
+        {
+            diagnostics = new List<ConversionDiagnostic>();
+
             if (mollierProcess == null)
             {
                 return null;
             }
 
+            if (double.IsNaN(designAirflow))
+            {
+                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Warning, DiagnosticCodes.AirflowNaN, "Design airflow is NaN; duties will not be set.", mollierProcess));
+            }
+
             if (mollierProcess is UndefinedProcess || mollierProcess is SpecificProcess)
             {
+                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Warning, DiagnosticCodes.UnsupportedProcess, $"Process type '{mollierProcess.GetType().Name}' is not supported for system component conversion.", mollierProcess));
                 return null;
             }
 
@@ -36,10 +52,24 @@ namespace SAM.Analytical.Systems.Mollier
             bool hasEnd = end != null && end.IsValid();
 
             // FanProcess derives from HeatingProcess, so it must be tested first.
-            if (mollierProcess is FanProcess)
+            if (mollierProcess is FanProcess fanProcess)
             {
-                // Fan duty is governed by pressure rise and efficiency; airflow is carried by the air system.
-                return new SystemFan("Fan");
+                SystemFan systemFan = new SystemFan("Fan");
+
+                const double fanEfficiency = 0.7;
+                double pressure = fanProcess.FanPressureRise(fanEfficiency);
+                if (!double.IsNaN(pressure))
+                {
+                    systemFan.Pressure = pressure;
+                    systemFan.OverallEfficiency = fanEfficiency;
+                }
+
+                if (!double.IsNaN(designAirflow))
+                {
+                    systemFan.DesignFlowRate = new SizedFlowValue(designAirflow, double.NaN);
+                }
+
+                return systemFan;
             }
 
             if (mollierProcess is HeatingProcess)
@@ -117,17 +147,38 @@ namespace SAM.Analytical.Systems.Mollier
                 return systemExchanger;
             }
 
-            if (mollierProcess is HumidificationProcess)
+            if (mollierProcess is HumidificationProcess humidificationProcess)
             {
-                // SystemHumidifier is abstract, so emit the concrete humidifier whose physics (and drawing
-                // symbol) matches the process: adiabatic (constant-enthalpy) humidification is spray/evaporative;
-                // isothermal (constant-temperature, incl. steam) humidification is a steam humidifier.
-                if (mollierProcess is AdiabaticHumidificationProcess)
+                humidificationProcess.HumidifierProperties(designAirflow, out double setpoint, out double effectiveness, out double duty, out double waterFlowCapacity);
+
+                if (humidificationProcess is AdiabaticHumidificationProcess)
                 {
-                    return new SystemSprayHumidifier("Humidifier");
+                    SystemSprayHumidifier systemSprayHumidifier = new SystemSprayHumidifier("Humidifier");
+                    if (!double.IsNaN(setpoint))
+                    {
+                        systemSprayHumidifier.Setpoint = setpoint;
+                    }
+                    if (!double.IsNaN(effectiveness))
+                    {
+                        systemSprayHumidifier.Effectiveness = effectiveness;
+                    }
+                    if (!double.IsNaN(waterFlowCapacity))
+                    {
+                        systemSprayHumidifier.WaterFlowCapacity = new SizableValue(waterFlowCapacity);
+                    }
+                    return systemSprayHumidifier;
                 }
 
-                return new SystemSteamHumidifier("Humidifier");
+                SystemSteamHumidifier systemSteamHumidifier = new SystemSteamHumidifier("Humidifier");
+                if (!double.IsNaN(setpoint))
+                {
+                    systemSteamHumidifier.Setpoint = setpoint;
+                }
+                if (!double.IsNaN(duty))
+                {
+                    systemSteamHumidifier.Duty = new SizableValue(duty);
+                }
+                return systemSteamHumidifier;
             }
 
             if (mollierProcess is MixingProcess)
@@ -135,6 +186,7 @@ namespace SAM.Analytical.Systems.Mollier
                 return new SystemAirJunction("Mixing");
             }
 
+            diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Warning, DiagnosticCodes.UnsupportedProcess, $"Process type '{mollierProcess.GetType().Name}' is not supported for system component conversion.", mollierProcess));
             return null;
         }
     }

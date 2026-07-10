@@ -32,8 +32,21 @@ namespace SAM.Analytical.Systems.Mollier
         /// <returns>A connected <see cref="SystemPlantRoom"/>, or null when no components could be created.</returns>
         public static SystemPlantRoom SystemPlantRoom(IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, double designSupplyAirflow = double.NaN, double designExtractAirflow = double.NaN, string name = "Plant Room")
         {
+            List<ConversionDiagnostic> _;
+            return SystemPlantRoom(supplyMollierProcesses, extractMollierProcesses, designSupplyAirflow, designExtractAirflow, name, out _);
+        }
+
+        /// <summary>
+        /// Builds a <see cref="SystemPlantRoom"/> from a supply and an extract chain of Mollier processes
+        /// and collects structured diagnostics.
+        /// </summary>
+        public static SystemPlantRoom SystemPlantRoom(IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, double designSupplyAirflow, double designExtractAirflow, string name, out List<ConversionDiagnostic> diagnostics)
+        {
+            diagnostics = new List<ConversionDiagnostic>();
+
             if (supplyMollierProcesses == null && extractMollierProcesses == null)
             {
+                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error, DiagnosticCodes.ChainEmpty, "Process chain is empty; no components were created.", null));
                 return null;
             }
 
@@ -46,17 +59,18 @@ namespace SAM.Analytical.Systems.Mollier
 
             // Supply chain.
             List<SystemExchanger> supplyExchangers = new List<SystemExchanger>();
-            int supplyCount = AddChain(systemPlantRoom, supplyMollierProcesses, designSupplyAirflow, airSystem, null, supplyExchangers, out ISystemComponent supplyFirst, out ISystemComponent supplyLast);
+            int supplyCount = AddChain(systemPlantRoom, supplyMollierProcesses, designSupplyAirflow, airSystem, null, supplyExchangers, out ISystemComponent supplyFirst, out ISystemComponent supplyLast, diagnostics);
 
             // Extract chain on the same air system, reusing the supply-side exchangers (in order) so a twin-wheel is
             // one device.
-            int extractCount = AddChain(systemPlantRoom, extractMollierProcesses, designExtractAirflow, airSystem, supplyExchangers, null, out ISystemComponent extractFirst, out ISystemComponent extractLast);
+            int extractCount = AddChain(systemPlantRoom, extractMollierProcesses, designExtractAirflow, airSystem, supplyExchangers, null, out ISystemComponent extractFirst, out ISystemComponent extractLast, diagnostics);
 
             // With both air paths known, derive each shared exchanger's sensible/latent effectiveness.
             ApplyHeatRecoveryEfficiencies(systemPlantRoom, supplyMollierProcesses, extractMollierProcesses, supplyExchangers);
 
             if (supplyCount == 0 && extractCount == 0)
             {
+                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error, DiagnosticCodes.ChainEmpty, "Process chain is empty; no components were created.", null));
                 return null;
             }
 
@@ -114,10 +128,26 @@ namespace SAM.Analytical.Systems.Mollier
         /// </summary>
         public static SystemEnergyCentre SystemEnergyCentre(IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, double designSupplyAirflow = double.NaN, double designExtractAirflow = double.NaN, string name = "Energy Centre")
         {
-            SystemPlantRoom systemPlantRoom = Create.SystemPlantRoom(supplyMollierProcesses, extractMollierProcesses, designSupplyAirflow, designExtractAirflow);
+            List<ConversionDiagnostic> _;
+            return SystemEnergyCentre(supplyMollierProcesses, extractMollierProcesses, designSupplyAirflow, designExtractAirflow, name, out _);
+        }
+
+        /// <summary>
+        /// Builds a <see cref="SystemEnergyCentre"/> from a supply and extract Mollier process chain
+        /// and collects structured diagnostics.
+        /// </summary>
+        public static SystemEnergyCentre SystemEnergyCentre(IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, double designSupplyAirflow, double designExtractAirflow, string name, out List<ConversionDiagnostic> diagnostics)
+        {
+            SystemPlantRoom systemPlantRoom = Create.SystemPlantRoom(supplyMollierProcesses, extractMollierProcesses, designSupplyAirflow, designExtractAirflow, "Plant Room", out diagnostics);
             if (systemPlantRoom == null)
             {
                 return null;
+            }
+
+            InjectLiquidSystems(systemPlantRoom, out List<ConversionDiagnostic> liquidDiagnostics);
+            if (liquidDiagnostics != null && liquidDiagnostics.Count > 0)
+            {
+                diagnostics.AddRange(liquidDiagnostics);
             }
 
             SystemEnergyCentre systemEnergyCentre = new SystemEnergyCentre(string.IsNullOrWhiteSpace(name) ? "Energy Centre" : name);
@@ -132,7 +162,7 @@ namespace SAM.Analytical.Systems.Mollier
         /// instances (in order) instead of creating new ones; when <paramref name="createdExchangers"/> is supplied,
         /// newly created exchangers are appended to it.
         /// </summary>
-        private static int AddChain(SystemPlantRoom systemPlantRoom, IEnumerable<IMollierProcess> mollierProcesses, double designAirflow, AirSystem airSystem, List<SystemExchanger> reusableExchangers, List<SystemExchanger> createdExchangers, out ISystemComponent firstComponent, out ISystemComponent lastComponent)
+        private static int AddChain(SystemPlantRoom systemPlantRoom, IEnumerable<IMollierProcess> mollierProcesses, double designAirflow, AirSystem airSystem, List<SystemExchanger> reusableExchangers, List<SystemExchanger> createdExchangers, out ISystemComponent firstComponent, out ISystemComponent lastComponent, List<ConversionDiagnostic> diagnostics)
         {
             firstComponent = null;
             lastComponent = null;
@@ -161,7 +191,12 @@ namespace SAM.Analytical.Systems.Mollier
                 }
                 else
                 {
-                    current = mollierProcess.SystemComponent(designAirflow);
+                    current = mollierProcess.SystemComponent(designAirflow, out List<ConversionDiagnostic> processDiagnostics);
+                    if (diagnostics != null && processDiagnostics != null)
+                    {
+                        diagnostics.AddRange(processDiagnostics);
+                    }
+
                     if (current == null)
                     {
                         continue;

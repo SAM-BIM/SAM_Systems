@@ -33,6 +33,11 @@ namespace SAM.Analytical.Systems.Mollier
         {
             SystemPlantRoom airSystemPlantRoom = Create.SystemPlantRoom(supplyMollierProcesses, extractMollierProcesses, designSupplyAirflow, designExtractAirflow);
 
+            if (template == null)
+            {
+                InjectLiquidSystems(airSystemPlantRoom, out _);
+            }
+
             return MergeAirSystems(template, airSystemPlantRoom, name);
         }
 
@@ -43,6 +48,11 @@ namespace SAM.Analytical.Systems.Mollier
         public static SystemEnergyCentre SystemEnergyCentre(IEnumerable<IMollierProcess> mollierProcesses, double designAirflow, string name, SystemEnergyCentre template)
         {
             SystemPlantRoom airSystemPlantRoom = Create.SystemPlantRoom(mollierProcesses, designAirflow);
+
+            if (template == null)
+            {
+                InjectLiquidSystems(airSystemPlantRoom, out _);
+            }
 
             return MergeAirSystems(template, airSystemPlantRoom, name);
         }

@@ -32,11 +32,11 @@ built DLLs from the sibling `SAM_Mollier` repo.
 
 | Mollier process            | SAM_Systems component | Derived values |
 |----------------------------|-----------------------|----------------|
-| `FanProcess`               | `SystemFan`           | — (duty implied by pressure/efficiency) |
+| `FanProcess`               | `SystemFan`           | `Pressure` = FanPressureRise (ΔP from ΔT); `OverallEfficiency` = 0.7; `DesignFlowRate` = design airflow |
 | `HeatingProcess`           | `SystemHeatingCoil`   | `Setpoint` = End dry-bulb; `Duty` = m·Δh |
 | `CoolingProcess`           | `SystemCoolingCoil`   | `Setpoint` = End dry-bulb; `BypassFactor` from Efficiency/ADP; `MinimumOffcoil` = ADP dry-bulb; `Duty` = m·Δh |
 | `HeatRecoveryProcess`      | `SystemExchanger`     | `Setpoint` = End dry-bulb; latent flagged when humidity ratio shifts (twin-wheel) |
-| `HumidificationProcess`    | `SystemHumidifier`    | — |
+| `HumidificationProcess`    | `SystemHumidifier`    | Adiabatic → `SystemSprayHumidifier` (setpoint, effectiveness, water-flow capacity); Steam → `SystemSteamHumidifier` (setpoint, duty) |
 | `MixingProcess`            | `SystemAirJunction`   | — |
 | `Undefined` / `Specific`   | (skipped)             | — |
 
@@ -50,6 +50,70 @@ flow is `airflow · ρ(inlet)` using the moist-air density at the process Start,
 duty is `|ṁ · (h_end − h_start)|` (`Query.Duty`). Bypass factor is
 `(T_off − T_adp) / (T_on − T_adp)` clamped to `[0,1]` (`Query.BypassFactor`),
 using `CoolingProcess.ApparatusDewPoint()` (which already folds in efficiency).
+
+### Fan pressure derivation (`Query.FanPressureRise`)
+
+Fan pressure rise [Pa] is derived from the temperature pickup across a `FanProcess`:
+
+```
+ΔT = End.DryBulbTemperature − Start.DryBulbTemperature
+ΔP = ρ_inlet · cp_air · ΔT / η_fan
+```
+
+where `cp_air = 1010 J/kg·K`, `ρ_inlet` is the moist-air density at the process inlet,
+and the default fan total efficiency `η_fan` is 0.7. Returns `NaN` when the start/end
+are invalid or `ΔT ≤ 0`.
+
+`SystemComponent` for `FanProcess` calls `FanPressureRise`; when the result is valid,
+sets `SystemFan.Pressure`, `SystemFan.OverallEfficiency` (= 0.7), and
+`SystemFan.DesignFlowRate` from the design airflow.
+
+### Humidifier derivation (`Query.HumidifierProperties`)
+
+Humidification processes derive four properties for the control model:
+
+- **Setpoint** — the end-point dry-bulb temperature for steam humidifiers,
+  or the target humidity ratio for adiabatic (spray) humidifiers.
+- **Effectiveness** — for adiabatic humidifiers, the ratio of actual humidity-ratio
+  rise to the maximum possible (saturation).
+- **Duty** [W] — humidification thermal load, `|ṁ · (h_end − h_start)|`.
+- **Water-flow capacity** [kg/s] — mass rate of water evaporated, `ṁ · Δω`.
+
+Adiabatic humidification processes map to `SystemSprayHumidifier`; isothermal (steam)
+map to `SystemSteamHumidifier`. All values return `NaN` when the process or endpoints
+are invalid.
+
+### Liquid system auto-injection (`InjectLiquidSystems`)
+
+When no energy-centre template is provided, the bridge auto-generates minimal liquid
+systems so the output is simulation-ready without manual plant definition:
+
+- **Heating:** if any `SystemHeatingCoil` exists in the plant room, a `LiquidSystem`
+  ("Heating Hot Water") and `SystemBoiler` are created and daisy-chain wired to all
+  heating-coil liquid connectors (boiler→coil→…→coil→boiler).
+- **Cooling:** if any `SystemCoolingCoil` exists, a `LiquidSystem` ("Chilled Water")
+  and `SystemAirSourceChiller` are created and wired to all cooling-coil liquid connectors.
+
+`InjectLiquidSystems` is called from every `SystemEnergyCentre` entry point where no
+template is supplied. When injection cannot be performed (e.g. missing assembly), a
+`MOLLIER‑014` (`LiquidInjectionFailed`) warning diagnostic is emitted.
+
+### Diagnostic model
+
+Every bridge `Create` method with a diagnostic `out` parameter produces a
+`List<ConversionDiagnostic>` with structured `Severity` / `Code` / `Message` entries:
+
+| Code | Severity | Meaning |
+|------|----------|---------|
+| `MOLLIER-001` | Warning | Unsupported process type (mapped to null) |
+| `MOLLIER-004` | Warning | Design airflow is NaN; duties will not be set |
+| `MOLLIER-005` | Error | Process chain is null |
+| `MOLLIER-012` | Error | Process chain is empty; no components were created |
+| `MOLLIER-014` | Warning | Could not inject heating/cooling liquid system |
+
+`ConversionDiagnostic` carries a reference to the source `IMollierProcess` (or null
+for chain-level diagnostics). Diagnostics accumulate across the conversion pipeline
+and are surfaced in the Grasshopper nodes for user feedback.
 
 ### Chain → topology
 
@@ -70,12 +134,38 @@ SAM_Systems/SAM.Analytical.Systems.Mollier/
   Query/SystemComponentType.cs            # process → component System.Type classifier
   Query/Duty.cs                           # Duty(process, airflow), MassFlow(process, airflow)
   Query/BypassFactor.cs                   # BypassFactor(coolingProcess) from ADP
-  Create/SystemComponent.cs               # process → ISystemComponent (duty/setpoint/bypass)
+  Query/FanPressure.cs                    # FanPressureRise(fanProcess, efficiency) from ΔT pickup
+  Query/HeatRecoveryEfficiency.cs         # supply-side sensible/latent effectiveness from both paths
+  Query/HumidifierProperties.cs           # HumidifierProperties(process, airflow, out setpoint/effectiveness/duty/water)
+  Create/SystemComponent.cs               # process → ISystemComponent (duty/setpoint/bypass/fan-pressure)
   Create/SystemPlantRoom.cs               # ordered chain → connected plant room
   Create/SystemEnergyCentre.cs            # plant room → energy centre (top-level entry)
+  Create/SystemEnergyCentreByTemplate.cs  # merge air systems into template energy centre
   Create/SystemEnergyCentreByResult.cs    # overload sourcing design airflow from AirHandlingUnitResult
-  Create/SupplyExtract.cs                 # supply + extract chains; shared twin-wheel exchanger
-  Query/HeatRecoveryEfficiency.cs         # supply-side sensible/latent effectiveness from both paths
+  Create/SupplyExtract.cs                 # supply + extract chains; shared twin-wheel exchanger; boundary junctions; room creation
+  Create/OutsideAirJunction.cs            # AddBoundaryJunction helper
+  Create/RoomGroup.cs                     # AddRoom (space + damper + group junctions), DisplayAirSystemGroup
+  Create/LiquidSystem.cs                  # InjectLiquidSystems; auto-create heating/cooling liquid loops
+
+SAM_Systems/SAM.Analytical.Systems/
+  Create/DisplaySystemEnergyCentre.cs     # auto-layout schematic; two-row supply/extract; connection routing
+
+SAM_Systems/SAM.Analytical.Systems.Mollier/
+  Classes/ConversionDiagnostic.cs         # DiagnosticSeverity, ConversionDiagnostic, DiagnosticCodes
+  Classes/ConversionResult.cs             # bridge output wrapper with diagnostics
+
+SAM_Systems/SAM.Analytical.Systems.Mollier.Tests/
+  SAM.Analytical.Systems.Mollier.Tests.csproj   # net8.0; xunit 2.9.2; references bridge + Mollier/base DLLs
+  Create/SystemComponentTests.cs          # per-process mapping + fan-before-heating + null/unsupported
+  Create/SystemPlantRoomTests.cs          # single-chain wiring, component count, connector direction
+  Create/SupplyExtractTests.cs            # twin-wheel shared exchanger, room creation
+  Query/DutyTests.cs                      # known enthalpy changes, NaN inputs
+  Query/BypassFactorTests.cs              # ADP, clamp, zero denominator
+  Query/SystemComponentTypeTests.cs       # type classification
+  Json/RoundTripTests.cs                  # ToJson→FromJson preserves component data
+  Diagnostics/ConversionDiagnosticTests.cs # all diagnostic codes emitted correctly
+  Integration/TasExportReadinessTests.cs   # structural validation for Tas TPD export
+  Integration/MVRE_ComparisonTests.cs      # comparison against reference MVRE.json
 
 Grasshopper/SAM.Analytical.Grasshopper.Systems/
   Component/SAMSystemsCreateEnergyCentreByMollier.cs     # Mollier processes → SystemEnergyCentre
@@ -112,6 +202,24 @@ and written to the `SystemExchanger` (`ExchangerCalculationMethod`/`ExchangerTyp
 In supply-only mode the exchanger is still created and flagged latent-capable when the
 process shifts humidity, but efficiencies are left for the user to set (a single process
 cannot determine effectiveness without the exhaust-side inlet).
+
+### Two-row supply/extract layout
+
+When a single plant room has one `AirSystem` serving both supply and extract chains,
+`DisplaySystemEnergyCentre` detects the flow split by locating the `SystemSpace`
+(room) component and lays out the schematic in two rows:
+
+- **Supply row (y=0):** components before the room, left-to-right in airflow order.
+- **Extract row (y=−0.8):** components after the room, **right-to-left** flow for
+  schematic symmetry — the exhaust end sits under the fresh-air side so the loop reads
+  naturally. The first extract component aligns vertically with the room on the supply row.
+- Shared components (`SystemExchanger` with two air paths) are placed once on the
+  supply row; their second air-path connectors route down to the extract row.
+- Falls back to the original single-row layout if the two-row split cannot be resolved
+  (supply-only, extract-only, multiple systems).
+
+The row step of 0.8 symbol units matches the vertical spacing of the two air paths on
+a shared twin-wheel exchanger symbol.
 
 ## Usage
 
@@ -170,6 +278,65 @@ JsonObject jsonObject = energyCentre.ToJsonObject();
 The single `supplyHR`/`extractHR` map to one shared `SystemExchanger` (supply on air
 path 1, extract on air path 2); the humidity-ratio shift flags it as latent-capable.
 
+## Worked example (summer cooling-only AHU)
+
+A simple supply-only plant room for summer sensible cooling of outdoor air to a supply
+condition. No extract chain — the bridge creates a boundary junction at the intake.
+
+```csharp
+using System.Collections.Generic;
+using SAM.Core.Mollier;
+using SAM.Core.Systems;
+
+const double pressure = 101325; // Pa
+
+// Summer design: outdoor 32 °C / 40 % RH → cool to 13 °C off-coil (efficiency 0.85)
+MollierPoint outdoor = SAM.Core.Mollier.Create.MollierPoint_ByRelativeHumidity(32, 40, pressure);
+CoolingProcess  cooling = outdoor.CoolingProcess(13, 0.85);
+FanProcess      fan     = cooling.End.FanProcess(0.8);
+
+var supply = new List<IMollierProcess> { cooling, fan };
+
+// Bridge: single chain
+SystemEnergyCentre energyCentre = SAM.Analytical.Systems.Mollier.Create.SystemEnergyCentre(
+    supply, designAirflow: 2.0);
+```
+
+The bridge produces a `SystemPlantRoom` with a `SystemCoolingCoil` (setpoint 13 °C,
+bypass factor from efficiency/ADP), a `SystemFan` (pressure derived from temperature rise),
+and a `Junction Fresh Air` boundary. The `SystemEnergyCentre` wraps it ready for Tas TPD
+export.
+
+## Worked example (winter heating + humidification)
+
+A supply-only plant room for winter pre-heat, steam humidification, and reheat:
+
+```csharp
+using System.Collections.Generic;
+using SAM.Core.Mollier;
+using SAM.Core.Systems;
+
+const double pressure = 101325; // Pa
+
+// Winter design: outdoor 0 °C / 80 % RH → pre-heat to 20 °C → humidify (+0.005 kg/kg) → reheat to 25 °C
+MollierPoint outdoor  = SAM.Core.Mollier.Create.MollierPoint_ByRelativeHumidity(0, 80, pressure);
+HeatingProcess                preheat    = outdoor.HeatingProcess(20);
+SteamHumidificationProcess    humidify  = preheat.End.SteamHumidificationProcess_ByHumidityRatioDifference(0.005);
+HeatingProcess                reheat    = humidify.End.HeatingProcess(25);
+FanProcess                    fan       = reheat.End.FanProcess(0.6);
+
+var supply = new List<IMollierProcess> { preheat, humidify, reheat, fan };
+
+// Bridge: single chain
+SystemEnergyCentre energyCentre = SAM.Analytical.Systems.Mollier.Create.SystemEnergyCentre(
+    supply, designAirflow: 1.8);
+```
+
+The bridge produces a `SystemPlantRoom` with two `SystemHeatingCoil` components
+(pre-heat + reheat, each with their own setpoint from the end dry-bulb), a
+`SystemSteamHumidifier` (setpoint and duty derived from the humidity-ratio shift),
+and a `SystemFan`. A `Junction Fresh Air` boundary caps the intake.
+
 ## Status / TODO
 
 - ✅ Core bridge (`Create.SystemComponent` / `SystemPlantRoom` / `SystemEnergyCentre`,
@@ -180,14 +347,24 @@ path 1, extract on air path 2); the humidity-ratio shift flags it as latent-capa
   `SAM.Geometry.Grasshopper.Mollier` (for `GooMollierProcessParam`) from the SAM_Mollier build.
 - ✅ Overload sourcing `designAirflow` from `AirHandlingUnitResult.SupplyAirFlow`.
 - ✅ Supply + extract overload sharing one heat-recovery exchanger across both air
-  paths (twin-wheel), exposed via optional GH inputs. Pairing is order-based — review
-  if a chain has multiple heat-recovery devices.
+  paths (twin-wheel), exposed via optional GH inputs.
 - ✅ Worked example + framework-free self-check `TwinWheelExample` (in the bridge
   assembly) and a `SAMSystems.MollierTwinWheelExample` GH node that builds the example
-  and reports PASS/FAIL checks (component creation, single plant room, JSON round-trip,
-  cooling duty and bypass factor).
+  and reports PASS/FAIL checks.
+- ✅ Fan pressure derivation (`Query.FanPressureRise`) — ΔP from ΔT pickup across a
+  `FanProcess`, with density, cp_air, and fan efficiency.
+- ✅ Humidifier derivation (`Query.HumidifierProperties`) — setpoint, effectiveness,
+  duty, and water-flow capacity for adiabatic (spray) and isothermal (steam) processes.
+- ✅ Liquid system auto-injection (`InjectLiquidSystems`) — boiler + chiller liquid
+  loops wired to heating/cooling coils when no template is supplied.
+- ✅ Two-row supply/extract auto-layout in `DisplaySystemEnergyCentre` — supply row
+  (top, left-to-right), extract row (bottom, right-to-left), shared exchangers on
+  supply row with downward-routed second air paths.
+- ✅ Structured diagnostic model (`ConversionDiagnostic` / `DiagnosticCodes`) —
+  MOLLIER‑001…014 codes surfaced through all bridge `Create` methods and Grasshopper
+  nodes.
+- ✅ xUnit test project (`SAM.Analytical.Systems.Mollier.Tests`) — 74 tests covering
+  component mapping, duty/bypass/fan-pressure queries, chain wiring, supply+extract,
+  JSON round-trip, diagnostics, Tas export readiness, and MVRE comparison.
 - ⏳ CESBP-2025 twin-wheel validation against a manually authored Tas model — paper
   deliverable; Tas export lives in the separate `SAM_Tas` repo.
-- ⚠️ Not yet compiled: this container has no .NET toolchain and no base `SAM` /
-  `SAM_Mollier` build output. Build locally in the order above (`SAM` + `SAM_Mollier`
-  before `SAM_Systems`) to validate.

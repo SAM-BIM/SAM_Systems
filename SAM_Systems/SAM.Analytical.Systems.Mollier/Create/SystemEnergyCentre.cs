@@ -22,10 +22,31 @@ namespace SAM.Analytical.Systems.Mollier
         /// <returns>A <see cref="SystemEnergyCentre"/>, or null when no plant room could be built.</returns>
         public static SystemEnergyCentre SystemEnergyCentre(this IEnumerable<IMollierProcess> mollierProcesses, double designAirflow = double.NaN, string name = "Energy Centre")
         {
-            SystemPlantRoom systemPlantRoom = Create.SystemPlantRoom(mollierProcesses, designAirflow);
+            List<ConversionDiagnostic> _;
+            return SystemEnergyCentre(mollierProcesses, designAirflow, name, out _);
+        }
+
+        /// <summary>
+        /// Builds a simulation-ready <see cref="SystemEnergyCentre"/> from an ordered chain of Mollier processes
+        /// and collects structured diagnostics.
+        /// </summary>
+        /// <param name="mollierProcesses">Ordered psychrometric process chain.</param>
+        /// <param name="designAirflow">Design volumetric airflow [m3/s].</param>
+        /// <param name="name">Energy centre name.</param>
+        /// <param name="diagnostics">Receives any diagnostics generated during conversion.</param>
+        /// <returns>A <see cref="SystemEnergyCentre"/>, or null when no plant room could be built.</returns>
+        public static SystemEnergyCentre SystemEnergyCentre(this IEnumerable<IMollierProcess> mollierProcesses, double designAirflow, string name, out List<ConversionDiagnostic> diagnostics)
+        {
+            SystemPlantRoom systemPlantRoom = Create.SystemPlantRoom(mollierProcesses, designAirflow, "Plant Room", "Air System", out diagnostics);
             if (systemPlantRoom == null)
             {
                 return null;
+            }
+
+            InjectLiquidSystems(systemPlantRoom, out List<ConversionDiagnostic> liquidDiagnostics);
+            if (liquidDiagnostics != null && liquidDiagnostics.Count > 0)
+            {
+                diagnostics.AddRange(liquidDiagnostics);
             }
 
             SystemEnergyCentre systemEnergyCentre = new SystemEnergyCentre(name);
@@ -43,15 +64,31 @@ namespace SAM.Analytical.Systems.Mollier
         /// <returns>A <see cref="SystemEnergyCentre"/>, or null.</returns>
         public static SystemEnergyCentre SystemEnergyCentre(this MollierGroup mollierGroup, double designAirflow = double.NaN, string name = null)
         {
-            if (mollierGroup == null)
+            List<ConversionDiagnostic> _;
+            return SystemEnergyCentre(mollierGroup, designAirflow, name, out _);
+        }
+
+        /// <summary>
+        /// Builds a simulation-ready <see cref="SystemEnergyCentre"/> from a <see cref="MollierGroup"/>
+        /// and collects structured diagnostics.
+        /// </summary>
+        /// <param name="mollierGroup">Group holding the ordered psychrometric process chain.</param>
+        /// <param name="designAirflow">Design volumetric airflow [m3/s].</param>
+        /// <param name="name">Energy centre name. Defaults to the group name when available.</param>
+        /// <param name="diagnostics">Receives any diagnostics generated during conversion.</param>
+        /// <returns>A <see cref="SystemEnergyCentre"/>, or null.</returns>
+        public static SystemEnergyCentre SystemEnergyCentre(this MollierGroup mollierGroup, double designAirflow, string name, out List<ConversionDiagnostic> diagnostics)
+        {
+            SystemPlantRoom systemPlantRoom = Create.SystemPlantRoom(mollierGroup, designAirflow, null, out diagnostics);
+            if (systemPlantRoom == null)
             {
                 return null;
             }
 
-            SystemPlantRoom systemPlantRoom = Create.SystemPlantRoom(mollierGroup, designAirflow);
-            if (systemPlantRoom == null)
+            InjectLiquidSystems(systemPlantRoom, out List<ConversionDiagnostic> liquidDiagnostics);
+            if (liquidDiagnostics != null && liquidDiagnostics.Count > 0)
             {
-                return null;
+                diagnostics.AddRange(liquidDiagnostics);
             }
 
             string energyCentreName = name ?? (string.IsNullOrWhiteSpace(mollierGroup.Name) ? "Energy Centre" : mollierGroup.Name);

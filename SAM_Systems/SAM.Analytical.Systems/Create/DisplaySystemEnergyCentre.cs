@@ -111,45 +111,52 @@ namespace SAM.Analytical.Systems
             Dictionary<System.Guid, ISystemComponent> dictionary = new Dictionary<System.Guid, ISystemComponent>();
 
             List<ISystem> systems = systemPlantRoom.GetSystems();
-            int row = 0;
             if (systems != null)
             {
-                foreach (ISystem system in systems)
+                bool twoRowLaidOut = false;
+
+                // Two-row layout: when a single AirSystem serves both supply and extract chains.
+                if (systems.Count == 1)
                 {
-                    List<ISystemComponent> orderedSystemComponents = OrderedSystemComponents(systemPlantRoom, system);
-                    int column = 0;
-                    foreach (ISystemComponent systemComponent in orderedSystemComponents)
+                    ISystem singleSystem = systems[0];
+                    List<ISystemComponent> orderedSystemComponents = OrderedSystemComponents(systemPlantRoom, singleSystem);
+
+                    if (TrySplitChains(orderedSystemComponents, out int splitIndex))
                     {
-                        System.Guid guid = Guid(systemComponent);
-                        if (dictionary.ContainsKey(guid))
+                        // Supply row (y=0), left-to-right, including the room component.
+                        int supplyEndCol = PlaceChain(orderedSystemComponents, 0, splitIndex, 0, 0,
+                            dictionary, displaySystemManager, report);
+
+                        // Extract row: right-to-left flow for schematic symmetry.
+                        // Reverse the extract chain so left-to-right placement reads as right-to-left airflow.
+                        int extractCount = orderedSystemComponents.Count - splitIndex - 1;
+                        if (extractCount > 0)
                         {
-                            // Already placed on an earlier row (shared component); keep its position but advance the
-                            // column so the rest of this row stays aligned with it.
-                            column++;
-                            continue;
+                            List<ISystemComponent> extractReversed = new List<ISystemComponent>();
+                            for (int i = orderedSystemComponents.Count - 1; i > splitIndex; i--)
+                            {
+                                extractReversed.Add(orderedSystemComponents[i]);
+                            }
+
+                            int extractStartCol = System.Math.Max(0, supplyEndCol - extractCount);
+                            PlaceChain(extractReversed, 0, extractReversed.Count - 1, extractStartCol,
+                                -DisplaySystemRowStep, dictionary, displaySystemManager, report);
                         }
 
-                        SystemComponent systemComponent_Temp = systemComponent as SystemComponent;
-                        if (systemComponent_Temp == null)
-                        {
-                            column++;
-                            continue;
-                        }
-
-                        Point2D location = new Point2D(column * DisplaySystemColumnStep, -row * DisplaySystemRowStep);
-                        IDisplaySystemObject displaySystemObject = Create.DisplayObject<IDisplaySystemObject>(systemComponent_Temp, location, displaySystemManager);
-                        if (displaySystemObject == null)
-                        {
-                            report.Add($"No symbol for {systemComponent_Temp.GetType().Name} '{systemComponent_Temp.Name}' - component skipped (it will not be drawn).");
-                            column++;
-                            continue;
-                        }
-
-                        dictionary[guid] = (ISystemComponent)displaySystemObject;
-                        column++;
+                        twoRowLaidOut = true;
                     }
+                }
 
-                    row++;
+                if (!twoRowLaidOut)
+                {
+                    int row = 0;
+                    foreach (ISystem system in systems)
+                    {
+                        List<ISystemComponent> orderedSystemComponents = OrderedSystemComponents(systemPlantRoom, system);
+                        PlaceChain(orderedSystemComponents, 0, orderedSystemComponents.Count - 1, 0,
+                            -row * DisplaySystemRowStep, dictionary, displaySystemManager, report);
+                        row++;
+                    }
                 }
             }
 
@@ -314,6 +321,66 @@ namespace SAM.Analytical.Systems
         private static string RelationKey(System.Guid systemGuid, System.Guid componentGuid)
         {
             return systemGuid.ToString() + "|" + componentGuid.ToString();
+        }
+
+        private static bool TrySplitChains(List<ISystemComponent> orderedComponents, out int splitIndex)
+        {
+            splitIndex = -1;
+            if (orderedComponents == null || orderedComponents.Count < 4)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < orderedComponents.Count; i++)
+            {
+                if (orderedComponents[i] is SystemSpace)
+                {
+                    splitIndex = i;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static int PlaceChain(List<ISystemComponent> orderedSystemComponents,
+            int startIndex, int endIndex, int startColumn, double rowY,
+            Dictionary<System.Guid, ISystemComponent> dictionary,
+            DisplaySystemManager displaySystemManager, List<string> report)
+        {
+            int column = startColumn;
+            for (int i = startIndex; i <= endIndex; i++)
+            {
+                ISystemComponent systemComponent = orderedSystemComponents[i];
+
+                System.Guid guid = Guid(systemComponent);
+                if (dictionary.ContainsKey(guid))
+                {
+                    column++;
+                    continue;
+                }
+
+                SystemComponent systemComponent_Temp = systemComponent as SystemComponent;
+                if (systemComponent_Temp == null)
+                {
+                    column++;
+                    continue;
+                }
+
+                Point2D location = new Point2D(column * DisplaySystemColumnStep, rowY);
+                IDisplaySystemObject displaySystemObject = Create.DisplayObject<IDisplaySystemObject>(systemComponent_Temp, location, displaySystemManager);
+                if (displaySystemObject == null)
+                {
+                    report.Add(string.Format("No symbol for {0} '{1}' - component skipped (it will not be drawn).", systemComponent_Temp.GetType().Name, systemComponent_Temp.Name));
+                    column++;
+                    continue;
+                }
+
+                dictionary[guid] = (ISystemComponent)displaySystemObject;
+                column++;
+            }
+
+            return column;
         }
     }
 }

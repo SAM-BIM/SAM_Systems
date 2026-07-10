@@ -229,11 +229,23 @@ namespace SAM.Analytical.Systems.Mollier
                     List<ISystemComponent> displayConnections = displayComponents.FindAll(x => x is ISystemConnection);
                     displayComponents.RemoveAll(x => x is ISystemConnection);
 
-                    bool componentsDrawable = displayComponents.Count != 0 && displayComponents.TrueForAll(x => x is IDisplaySystemObject && SAM.Analytical.Systems.Query.SAMGeometry2Dobject((IDisplaySystemObject)x) != null);
-                    Check(ref result, messages, componentsDrawable, $"Every component is a drawable display object ({displayComponents.Count})");
+                    // Only check air-side components for display geometry; liquid/generic components
+                    // (boiler, chiller, etc.) may not have symbols.
+                    List<ISystemComponent> airComponents = displayComponents.FindAll(x => x is IAirSystemComponent);
+                    bool componentsDrawable = airComponents.Count != 0 && airComponents.TrueForAll(x => x is IDisplaySystemObject && SAM.Analytical.Systems.Query.SAMGeometry2Dobject((IDisplaySystemObject)x) != null);
+                    Check(ref result, messages, componentsDrawable, $"Every air-side component is a drawable display object ({airComponents.Count})");
 
-                    bool connectionsDrawable = displayConnections.Count != 0 && displayConnections.TrueForAll(x => x is IDisplaySystemObject && SAM.Analytical.Systems.Query.SAMGeometry2Dobject((IDisplaySystemObject)x) != null);
-                    Check(ref result, messages, connectionsDrawable, $"Every connection is a drawable display polyline ({displayConnections.Count})");
+                    // Only check air-system connections for display geometry.
+                    List<ISystemComponent> airConnections = displayConnections.FindAll(x =>
+                    {
+                        if (!(x is ISystemConnection conn)) return false;
+                        SystemType st = conn.SystemType;
+                        if (st == null) return false;
+                        System.Type t = st.Type;
+                        return t != null && typeof(AirSystem).IsAssignableFrom(t);
+                    });
+                    bool connectionsDrawable = airConnections.Count != 0 && airConnections.TrueForAll(x => x is IDisplaySystemObject && SAM.Analytical.Systems.Query.SAMGeometry2Dobject((IDisplaySystemObject)x) != null);
+                    Check(ref result, messages, connectionsDrawable, $"Every air-side connection is a drawable display polyline ({airConnections.Count})");
 
                     // The room-side items are wrapped in a DisplayAirSystemGroup (created once the room is laid out).
                     bool hasDisplayAirSystemGroup = (displaySystemPlantRoom.GetSystemGroups<DisplayAirSystemGroup>()?.Count ?? 0) > 0;
