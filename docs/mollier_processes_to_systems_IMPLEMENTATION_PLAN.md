@@ -896,3 +896,58 @@ Commit: "feat(mollier-bridge): diagnostics, humidifier/fan derivation, two-row l
 - **Quarterly cadence:** Open `sow/2026-Q3` from `master` at quarter start. Work entire quarter on this branch.
 - **End of quarter:** Raise PR from `sow/2026-Q3` to upstream `HoareLea/master`.
 - **Current state:** PR #8 merged into `sow/2026-Q3` via fast-forward. SAM_Mollier and SAM are on `sow/2026-Q3`.
+- **Q3 delivery:** All 10 phases delivered. Commit `46d08f6` on `feature/mollier-bridge-enhancements`.
+
+---
+
+## Q. Delivery Status (2026-07-10)
+
+### Phase Completion
+
+| Phase | Description | Status | Files Created | Files Modified |
+|-------|------------|--------|--------------|---------------|
+| **P1** | Branch Setup & Solution Registration | ✅ Pre-existing (PR #8) | — | `SAM_Systems.sln` |
+| **P2** | Structured Diagnostics Model | ✅ Pre-existing (PR #8) + Enhanced (P6) | `Classes/ConversionDiagnostic.cs`, `Classes/ConversionResult.cs` | 4 Create files |
+| **P3** | Humidifier Setpoint Derivation | ✅ Pre-existing (PR #8) | `Query/HumidifierProperties.cs` | `Create/SystemComponent.cs` |
+| **P4** | Fan Pressure Derivation | ✅ Delivered | `Query/FanPressure.cs` | `Create/SystemComponent.cs` |
+| **P5** | Two-Row Layout | ✅ Delivered | — | `Create/DisplaySystemEnergyCentre.cs` |
+| **P6** | Liquid System Auto-Injection | ✅ Delivered | `Create/LiquidSystem.cs` | `Create/SystemEnergyCentre.cs`, `Create/SupplyExtract.cs`, `Create/SystemEnergyCentreByTemplate.cs` |
+| **P7** | Unit Test Project (62 → 75 tests) | ✅ Delivered | 11 test files + `.csproj` | `SAM_Systems.sln` |
+| **P8** | Tas Export Structural Validation | ✅ Delivered | `Integration/TasExportReadinessTests.cs`, `Integration/MVRE_ComparisonTests.cs` | — |
+| **P9** | Documentation & Examples | ✅ Delivered | — | `docs/Mollier-Systems-Bridge.md` |
+| **P10** | Build Script & Final Verification | ✅ Delivered | `build.ps1`, `test.ps1`, `Integration/TwinWheelVerifyTests.cs` | `Example/TwinWheelExample.cs` |
+
+### Verification
+
+| Check | Result |
+|-------|--------|
+| `build.ps1` (SAM → SAM_Mollier → SAM_Systems) | All 3 solutions OK |
+| `dotnet test` | **75 passed, 0 failed, 0 skipped** |
+| `TwinWheelExample.Verify()` | 27/27 PASS lines |
+| `docs/Mollier-Systems-Bridge.md` | Updated with P4-P9 features, 3 worked examples, file listing |
+| `docs/mollier_processes_to_systems_IMPLEMENTATION_PLAN.md` | This document — delivery status recorded |
+
+### New Files Delivered (21 files)
+
+| Directory | Files |
+|-----------|-------|
+| `SAM.Analytical.Systems.Mollier/Query/` | `FanPressure.cs`, `HumidifierProperties.cs` |
+| `SAM.Analytical.Systems.Mollier/Create/` | `LiquidSystem.cs` |
+| `SAM.Analytical.Systems.Mollier/Classes/` | `ConversionDiagnostic.cs`, `ConversionResult.cs` |
+| `SAM.Analytical.Systems.Mollier.Tests/` | `.csproj`, 10 test `.cs` files, 2 integration `.cs` files, 1 verify `.cs` file |
+| Root | `build.ps1`, `test.ps1` |
+
+### Modified Files (10 files)
+
+| File | Change |
+|------|--------|
+| `SAM_Systems.sln` | Added test project |
+| `Create/SystemComponent.cs` | Fan pressure + efficiency, humidifier properties, diagnostics |
+| `Create/SystemEnergyCentre.cs` | Liquid injection, diagnostics |
+| `Create/SystemEnergyCentreByTemplate.cs` | Liquid injection when template=null |
+| `Create/SupplyExtract.cs` | Liquid injection, diagnostics |
+| `Create/DisplaySystemEnergyCentre.cs` | Two-row supply/extract layout |
+| `Classes/ConversionDiagnostic.cs` | MOLLIER-014 code |
+| `Example/TwinWheelExample.cs` | Air-side-only display checks |
+| `docs/Mollier-Systems-Bridge.md` | Full update (370 lines) |
+| `docs/mollier_processes_to_systems_IMPLEMENTATION_PLAN.md` | Delivery status (this section) |
