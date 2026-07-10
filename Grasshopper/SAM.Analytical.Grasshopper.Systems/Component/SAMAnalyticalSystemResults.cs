@@ -43,6 +43,16 @@ namespace SAM.Analytical.Grasshopper
             }
         }
 
+        public string MinCompatibleVersion => LatestComponentVersion;
+
+        public ObsoleteSeverity ObsoleteSeverity
+        {
+            get
+            {
+                return Core.Grasshopper.Query.GetObsoleteSeverity(this);
+            }
+        }
+
         /// <summary>
         /// Initializes a new instance of the SAM_point3D class.
         /// </summary>
