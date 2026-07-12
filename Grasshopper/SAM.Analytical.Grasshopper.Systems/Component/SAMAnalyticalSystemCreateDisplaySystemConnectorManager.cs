@@ -87,7 +87,7 @@ namespace SAM.Analytical.Grasshopper.Systems
             }
 
             List<DisplaySystemConnector> displaySystemConnectors = new List<DisplaySystemConnector>();
-            foreach(ISystemObject systemObject in displaySystemConnectors)
+            foreach(ISystemObject systemObject in systemObjects)
             {
                 if(systemObject is DisplaySystemConnector)
                 {
