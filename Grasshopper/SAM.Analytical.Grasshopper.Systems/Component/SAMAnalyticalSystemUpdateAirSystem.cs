@@ -156,7 +156,7 @@ namespace SAM.Analytical.Grasshopper.Systems
             }
 
             AirSystem airSystem = systemObject as AirSystem;
-            if (airSystem != null)
+            if (airSystem == null)
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Invalid data");
                 return;
