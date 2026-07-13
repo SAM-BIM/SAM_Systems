@@ -1,4 +1,6 @@
-﻿using Grasshopper.Kernel;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+using Grasshopper.Kernel;
 using Grasshopper.Kernel.Attributes;
 using Grasshopper.Kernel.Types;
 using SAM.Core.Grasshopper.Systems;
@@ -38,6 +40,16 @@ namespace SAM.Analytical.Grasshopper
             get
             {
                 return Core.Grasshopper.Query.Obsolete(this);
+            }
+        }
+
+        public string MinCompatibleVersion => LatestComponentVersion;
+
+        public ObsoleteSeverity ObsoleteSeverity
+        {
+            get
+            {
+                return Core.Grasshopper.Query.GetObsoleteSeverity(this);
             }
         }
 
