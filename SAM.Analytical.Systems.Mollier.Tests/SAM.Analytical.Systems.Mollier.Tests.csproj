@@ -8,11 +8,11 @@
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <OutputPath>..\..\build_tests\</OutputPath>
+    <OutputPath>..\build_tests\</OutputPath>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <OutputPath>..\..\build_tests\</OutputPath>
+    <OutputPath>..\build_tests\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -47,6 +47,11 @@
     <Reference Include="SAM.Analytical.Mollier">
       <HintPath>..\..\SAM_Mollier\build\SAM.Analytical.Mollier.dll</HintPath>
     </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\files\resources\Analytical\Systems\SystemEnergyCentre\MVRE.json" Link="files\resources\Analytical\Systems\SystemEnergyCentre\MVRE.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\files\resources\Analytical\Systems\SAM_DisplaySystemManager.JSON" Link="resources\Analytical\Systems\SAM_DisplaySystemManager.JSON" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

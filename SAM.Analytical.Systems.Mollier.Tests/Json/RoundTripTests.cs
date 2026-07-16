@@ -94,10 +94,19 @@ namespace SAM.Analytical.Systems.Mollier.Tests.Json
         public void Exchanger_RoundTrip_PreservesEfficiency()
         {
             SystemExchanger exchanger = new SystemExchanger("Test Exchanger");
+            exchanger.SensibleEfficiency = 0.75;
+            exchanger.LatentEfficiency = 0.65;
+            exchanger.ExchangerLatentType = ExchangerLatentType.HumidityRatio;
+
             JsonObject json = exchanger.ToJsonObject();
             SystemExchanger deserialized = new SystemExchanger(json);
 
             Assert.NotNull(deserialized);
+            Assert.NotNull(deserialized.SensibleEfficiency);
+            Assert.NotNull(deserialized.LatentEfficiency);
+            Assert.Equal(0.75, deserialized.SensibleEfficiency.Value, 6);
+            Assert.Equal(0.65, deserialized.LatentEfficiency.Value, 6);
+            Assert.Equal(ExchangerLatentType.HumidityRatio, deserialized.ExchangerLatentType);
         }
 
         [Fact]

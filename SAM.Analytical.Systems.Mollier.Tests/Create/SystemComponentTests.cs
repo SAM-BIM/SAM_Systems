@@ -95,11 +95,24 @@ namespace SAM.Analytical.Systems.Mollier.Tests.Create
         [Fact]
         public void HeatRecoveryProcess_MapsTo_SystemExchanger()
         {
-            // HeatRecoveryProcess has internal constructor — test via JSON deserialisation.
-            MollierPoint start = CreatePoint(10.0);
-            MollierPoint end = CreatePoint(18.0);
-            HeatRecoveryProcess process = new HeatRecoveryProcess(new JsonObject());
+            // HeatRecoveryProcess's (MollierPoint, MollierPoint) constructor is internal, but the
+            // public SAM.Core.Mollier.Create.HeatRecoveryProcess_Supply factory builds one from
+            // ordinary intake/extract points, so there is no need to touch JSON deserialisation.
+            MollierPoint outdoor = SAM.Core.Mollier.Create.MollierPoint_ByRelativeHumidity(32, 40, 101325);
+            MollierPoint room = SAM.Core.Mollier.Create.MollierPoint_ByRelativeHumidity(24, 50, 101325);
+            HeatRecoveryProcess process = outdoor.HeatRecoveryProcess_Supply(room, 75, 65); // efficiencies in PERCENT
+
             Assert.NotNull(process);
+
+            // End dry-bulb: 32 + (24-32)*0.75 = 26.0 C. The humidity ratio also shifts (well over the
+            // 1e-6 latent threshold), so the mapped exchanger is flagged latent-capable.
+            ISystemComponent result = process.SystemComponent(2.0);
+            SystemExchanger exchanger = Assert.IsType<SystemExchanger>(result);
+
+            Assert.Equal(ExchangerCalculationMethod.Simple, exchanger.ExchangerCalculationMethod);
+            Assert.Equal(ExchangerLatentType.HumidityRatio, exchanger.ExchangerLatentType);
+            Assert.NotNull(exchanger.Setpoint);
+            Assert.Equal(26.0, exchanger.Setpoint.Value, 2);
         }
 
         [Fact]

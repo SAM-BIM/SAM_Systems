@@ -16,6 +16,7 @@ $exitCode = $LASTEXITCODE
 
 if ($exitCode -ne 0) {
     Write-Host "TESTS FAILED" -ForegroundColor Red
+    Write-Host ($result | Out-String)
     exit $exitCode
 }
 
@@ -28,8 +29,8 @@ Write-Host "==== TwinWheelExample.Verify ====" -ForegroundColor Cyan
 $buildOutput = "$repoRoot\build_tests"
 $dllPath = Get-ChildItem -Path $buildOutput -Recurse -Filter "SAM.Analytical.Systems.Mollier.Tests.dll" | Select-Object -First 1
 if (-not $dllPath) {
-    Write-Host "Test DLL not found at expected path; skipping Verify." -ForegroundColor Yellow
-    exit 0
+    Write-Host "FAIL: test DLL not found under $buildOutput after dotnet test." -ForegroundColor Red
+    exit 1
 }
 
 # Capture the Verify output via a thrown exception or xunit output by running the example directly
@@ -37,10 +38,19 @@ if (-not $dllPath) {
 $verifyResult = dotnet test $testProject --configuration $Configuration --filter "FullyQualifiedName~Verify" --no-build 2>&1
 $verifyExit = $LASTEXITCODE
 
-if ($verifyExit -eq 0) {
-    Write-Host "TwinWheelExample.Verify PASSED" -ForegroundColor Green
-} else {
-    Write-Host "WARNING: TwinWheelExample.Verify test was not found or failed (check test project)" -ForegroundColor Yellow
+if ($verifyExit -ne 0) {
+    Write-Host "TwinWheelExample.Verify FAILED" -ForegroundColor Red
+    Write-Host ($verifyResult | Out-String)
+    exit 1
 }
+
+# A zero exit code with no matching tests would otherwise look like a silent pass; treat it as a failure.
+if (($verifyResult | Out-String) -match 'No test matches|No test is available') {
+    Write-Host "TwinWheelExample.Verify FAILED: no tests matched the Verify filter" -ForegroundColor Red
+    Write-Host ($verifyResult | Out-String)
+    exit 1
+}
+
+Write-Host "TwinWheelExample.Verify PASSED" -ForegroundColor Green
 
 exit 0

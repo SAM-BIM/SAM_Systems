@@ -21,6 +21,7 @@ foreach ($sol in $solutions) {
     $result = dotnet build $sol.Path --configuration $Configuration 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Host "FAILED: $($sol.Name)" -ForegroundColor Red
+        Write-Host ($result | Out-String)
         $failed += $sol.Name
     } else {
         Write-Host "OK: $($sol.Name)" -ForegroundColor Green
