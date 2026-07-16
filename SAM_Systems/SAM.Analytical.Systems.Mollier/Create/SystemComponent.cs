@@ -76,7 +76,10 @@ namespace SAM.Analytical.Systems.Mollier
 
                 if (!double.IsNaN(designAirflow))
                 {
-                    systemFan.DesignFlowRate = new SizedFlowValue(designAirflow, double.NaN);
+                    // Tas TPD fan flow values are litres per second (SFP itself is W/(l/s); TPD template code
+                    // uses values like DesignFlowRate.Value = 150), so convert from the bridge's m3/s.
+                    systemFan.DesignFlowRate = new SizedFlowValue(designAirflow * 1000, double.NaN);
+                    systemFan.DesignFlowType = FlowRateType.Value;
                 }
 
                 return systemFan;

@@ -76,7 +76,9 @@ namespace SAM.Analytical.Systems.Mollier.Tests.Create
 
             SystemFan fan = Assert.IsType<SystemFan>(result);
             Assert.NotNull(fan.DesignFlowRate);
-            Assert.Equal(Airflow, fan.DesignFlowRate.Value, 4);
+            // Tas TPD fan flow values are litres per second; the bridge converts from its m3/s design airflow.
+            Assert.Equal(Airflow * 1000, fan.DesignFlowRate.Value, 4);
+            Assert.Equal(FlowRateType.Value, fan.DesignFlowType);
         }
 
         [Fact]

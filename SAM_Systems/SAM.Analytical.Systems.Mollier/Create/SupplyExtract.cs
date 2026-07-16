@@ -156,7 +156,7 @@ namespace SAM.Analytical.Systems.Mollier
                 return null;
             }
 
-            InjectLiquidSystems(systemPlantRoom, out List<ConversionDiagnostic> liquidDiagnostics);
+            InjectLiquidSystems(systemPlantRoom, out List<SystemEnergySource> systemEnergySources, out List<ConversionDiagnostic> liquidDiagnostics);
             if (liquidDiagnostics != null && liquidDiagnostics.Count > 0)
             {
                 diagnostics.AddRange(liquidDiagnostics);
@@ -164,6 +164,7 @@ namespace SAM.Analytical.Systems.Mollier
 
             SystemEnergyCentre systemEnergyCentre = new SystemEnergyCentre(string.IsNullOrWhiteSpace(name) ? "Energy Centre" : name);
             systemEnergyCentre.Add(systemPlantRoom);
+            AddSystemEnergySources(systemEnergyCentre, systemEnergySources);
 
             return systemEnergyCentre;
         }

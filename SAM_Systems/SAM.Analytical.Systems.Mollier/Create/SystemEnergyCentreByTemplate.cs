@@ -45,16 +45,21 @@ namespace SAM.Analytical.Systems.Mollier
         {
             SystemPlantRoom airSystemPlantRoom = Create.SystemPlantRoom(supplyMollierProcesses, extractMollierProcesses, designSupplyAirflow, designExtractAirflow, "Plant Room", out diagnostics);
 
+            List<SystemEnergySource> systemEnergySources = null;
             if (template == null)
             {
-                InjectLiquidSystems(airSystemPlantRoom, out List<ConversionDiagnostic> liquidDiagnostics);
+                InjectLiquidSystems(airSystemPlantRoom, out systemEnergySources, out List<ConversionDiagnostic> liquidDiagnostics);
                 if (liquidDiagnostics != null && liquidDiagnostics.Count > 0)
                 {
                     diagnostics.AddRange(liquidDiagnostics);
                 }
             }
 
-            return MergeAirSystems(template, airSystemPlantRoom, name);
+            // Template path: the template already owns its energy sources; systemEnergySources stays null and
+            // nothing is added. Template-less path: attach the injector's default gas/electricity sources.
+            SystemEnergyCentre result = MergeAirSystems(template, airSystemPlantRoom, name);
+            AddSystemEnergySources(result, systemEnergySources);
+            return result;
         }
 
         /// <summary>
@@ -76,16 +81,21 @@ namespace SAM.Analytical.Systems.Mollier
         {
             SystemPlantRoom airSystemPlantRoom = Create.SystemPlantRoom(mollierProcesses, designAirflow, "Plant Room", "Air System", out diagnostics);
 
+            List<SystemEnergySource> systemEnergySources = null;
             if (template == null)
             {
-                InjectLiquidSystems(airSystemPlantRoom, out List<ConversionDiagnostic> liquidDiagnostics);
+                InjectLiquidSystems(airSystemPlantRoom, out systemEnergySources, out List<ConversionDiagnostic> liquidDiagnostics);
                 if (liquidDiagnostics != null && liquidDiagnostics.Count > 0)
                 {
                     diagnostics.AddRange(liquidDiagnostics);
                 }
             }
 
-            return MergeAirSystems(template, airSystemPlantRoom, name);
+            // Template path: the template already owns its energy sources; systemEnergySources stays null and
+            // nothing is added. Template-less path: attach the injector's default gas/electricity sources.
+            SystemEnergyCentre result = MergeAirSystems(template, airSystemPlantRoom, name);
+            AddSystemEnergySources(result, systemEnergySources);
+            return result;
         }
 
         /// <summary>

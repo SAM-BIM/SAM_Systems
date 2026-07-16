@@ -43,7 +43,7 @@ namespace SAM.Analytical.Systems.Mollier
                 return null;
             }
 
-            InjectLiquidSystems(systemPlantRoom, out List<ConversionDiagnostic> liquidDiagnostics);
+            InjectLiquidSystems(systemPlantRoom, out List<SystemEnergySource> systemEnergySources, out List<ConversionDiagnostic> liquidDiagnostics);
             if (liquidDiagnostics != null && liquidDiagnostics.Count > 0)
             {
                 diagnostics.AddRange(liquidDiagnostics);
@@ -51,6 +51,7 @@ namespace SAM.Analytical.Systems.Mollier
 
             SystemEnergyCentre systemEnergyCentre = new SystemEnergyCentre(name);
             systemEnergyCentre.Add(systemPlantRoom);
+            AddSystemEnergySources(systemEnergyCentre, systemEnergySources);
 
             return systemEnergyCentre;
         }
@@ -85,7 +86,7 @@ namespace SAM.Analytical.Systems.Mollier
                 return null;
             }
 
-            InjectLiquidSystems(systemPlantRoom, out List<ConversionDiagnostic> liquidDiagnostics);
+            InjectLiquidSystems(systemPlantRoom, out List<SystemEnergySource> systemEnergySources, out List<ConversionDiagnostic> liquidDiagnostics);
             if (liquidDiagnostics != null && liquidDiagnostics.Count > 0)
             {
                 diagnostics.AddRange(liquidDiagnostics);
@@ -95,8 +96,30 @@ namespace SAM.Analytical.Systems.Mollier
 
             SystemEnergyCentre systemEnergyCentre = new SystemEnergyCentre(energyCentreName);
             systemEnergyCentre.Add(systemPlantRoom);
+            AddSystemEnergySources(systemEnergyCentre, systemEnergySources);
 
             return systemEnergyCentre;
+        }
+
+        /// <summary>
+        /// Adds the default energy sources produced by liquid-system injection to the energy centre. Sources are
+        /// energy-centre-level objects (SAM_Tas iterates GetSystemEnergySources() to create TPD FuelSources), so
+        /// they cannot be added by the plant-room-level injector itself.
+        /// </summary>
+        internal static void AddSystemEnergySources(SystemEnergyCentre systemEnergyCentre, IEnumerable<SystemEnergySource> systemEnergySources)
+        {
+            if (systemEnergyCentre == null || systemEnergySources == null)
+            {
+                return;
+            }
+
+            foreach (SystemEnergySource systemEnergySource in systemEnergySources)
+            {
+                if (systemEnergySource != null)
+                {
+                    systemEnergyCentre.Add(systemEnergySource);
+                }
+            }
         }
     }
 }
