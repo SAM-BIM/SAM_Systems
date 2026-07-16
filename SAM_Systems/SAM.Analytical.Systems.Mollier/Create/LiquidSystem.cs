@@ -41,7 +41,7 @@ namespace SAM.Analytical.Systems.Mollier
             {
                 if (plantEquipment == null)
                 {
-                    diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Warning,
+                    diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error,
                         DiagnosticCodes.LiquidInjectionFailed,
                         "Could not create plant equipment for " + liquidSystemName + ".", null));
                     return;
@@ -51,7 +51,12 @@ namespace SAM.Analytical.Systems.Mollier
                 systemPlantRoom.Add(liquidSystem);
 
                 systemPlantRoom.Add(plantEquipment);
-                systemPlantRoom.Connect(liquidSystem, plantEquipment);
+                if (!systemPlantRoom.Connect(liquidSystem, plantEquipment))
+                {
+                    diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error,
+                        DiagnosticCodes.LiquidInjectionFailed,
+                        $"Liquid loop for '{liquidSystemName}' left partially wired: could not relate liquid system to '{ComponentName(plantEquipment)}'.", null));
+                }
 
                 SystemType systemType = new SystemType(typeof(LiquidSystem));
 
@@ -65,13 +70,21 @@ namespace SAM.Analytical.Systems.Mollier
                         continue;
                     }
 
-                    systemPlantRoom.Connect(liquidSystem, coil);
+                    if (!systemPlantRoom.Connect(liquidSystem, coil))
+                    {
+                        diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error,
+                            DiagnosticCodes.LiquidInjectionFailed,
+                            $"Liquid loop for '{liquidSystemName}' left partially wired: could not relate liquid system to '{ComponentName(coil)}'.", null));
+                    }
 
                     int prevOut = UnconnectedLiquidIndex(systemPlantRoom, previous, systemType, SAM.Core.Direction.Out);
                     int coilIn = UnconnectedLiquidIndex(systemPlantRoom, coil, systemType, SAM.Core.Direction.In);
-                    if (prevOut != -1 && coilIn != -1)
+                    bool coilConnected = prevOut != -1 && coilIn != -1 && systemPlantRoom.Connect(previous, coil, out _, liquidSystem, prevOut, coilIn);
+                    if (!coilConnected)
                     {
-                        systemPlantRoom.Connect(previous, coil, out _, liquidSystem, prevOut, coilIn);
+                        diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error,
+                            DiagnosticCodes.LiquidInjectionFailed,
+                            $"Liquid loop for '{liquidSystemName}' left partially wired: could not connect '{ComponentName(previous)}' to '{ComponentName(coil)}'.", null));
                     }
 
                     previous = coil;
@@ -79,14 +92,17 @@ namespace SAM.Analytical.Systems.Mollier
 
                 int lastOut = UnconnectedLiquidIndex(systemPlantRoom, previous, systemType, SAM.Core.Direction.Out);
                 int equipIn = UnconnectedLiquidIndex(systemPlantRoom, plantEquipment, systemType, SAM.Core.Direction.In);
-                if (lastOut != -1 && equipIn != -1)
+                bool equipmentConnected = lastOut != -1 && equipIn != -1 && systemPlantRoom.Connect(previous, plantEquipment, out _, liquidSystem, lastOut, equipIn);
+                if (!equipmentConnected)
                 {
-                    systemPlantRoom.Connect(previous, plantEquipment, out _, liquidSystem, lastOut, equipIn);
+                    diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error,
+                        DiagnosticCodes.LiquidInjectionFailed,
+                        $"Liquid loop for '{liquidSystemName}' left partially wired: could not connect '{ComponentName(previous)}' to '{ComponentName(plantEquipment)}'.", null));
                 }
             }
             catch
             {
-                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Warning,
+                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error,
                     DiagnosticCodes.LiquidInjectionFailed,
                     "Could not inject " + liquidSystemName + " liquid system.", null));
             }

@@ -34,6 +34,7 @@ namespace SAM.Analytical.Systems.Mollier
 
             if (mollierProcess == null)
             {
+                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Warning, DiagnosticCodes.NullProcess, "Process is null; no system component created.", null));
                 return null;
             }
 
@@ -50,6 +51,15 @@ namespace SAM.Analytical.Systems.Mollier
 
             MollierPoint end = mollierProcess.End;
             bool hasEnd = end != null && end.IsValid();
+
+            MollierPoint start = mollierProcess.Start;
+            bool hasStart = start != null && start.IsValid();
+
+            if (!hasStart || !hasEnd)
+            {
+                string invalidState = !hasStart && !hasEnd ? "start and end" : (!hasStart ? "start" : "end");
+                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Warning, DiagnosticCodes.InvalidProcessState, $"Process {invalidState} state is null or invalid; derived setpoints and duties will not be set.", mollierProcess));
+            }
 
             // FanProcess derives from HeatingProcess, so it must be tested first.
             if (mollierProcess is FanProcess fanProcess)
@@ -104,11 +114,19 @@ namespace SAM.Analytical.Systems.Mollier
                 {
                     systemCoolingCoil.MinimumOffcoil = apparatusDewPoint.DryBulbTemperature;
                 }
+                else
+                {
+                    diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Info, DiagnosticCodes.ApparatusDewPointNotAvailable, "Apparatus dew point not available; MinimumOffcoil not set.", mollierProcess));
+                }
 
                 double bypassFactor = coolingProcess.BypassFactor();
                 if (!double.IsNaN(bypassFactor))
                 {
                     systemCoolingCoil.BypassFactor = bypassFactor;
+                }
+                else
+                {
+                    diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Info, DiagnosticCodes.BypassFactorInvalid, "Bypass factor is NaN; not set.", mollierProcess));
                 }
 
                 double duty = coolingProcess.Duty(designAirflow);
@@ -137,8 +155,7 @@ namespace SAM.Analytical.Systems.Mollier
 
                 // Twin-wheel / latent recovery: a humidity-ratio shift across the process implies
                 // moisture transfer, so flag the exchanger as latent-capable.
-                MollierPoint start = mollierProcess.Start;
-                if (start != null && start.IsValid() && hasEnd
+                if (hasStart && hasEnd
                     && System.Math.Abs(start.HumidityRatio - end.HumidityRatio) > 1e-6)
                 {
                     systemExchanger.ExchangerLatentType = ExchangerLatentType.HumidityRatio;

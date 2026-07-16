@@ -44,7 +44,7 @@ namespace SAM.Analytical.Systems.Mollier
 
             if (mollierProcesses == null)
             {
-                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error, DiagnosticCodes.ChainEmpty, "Process chain is empty; no components were created.", null));
+                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error, DiagnosticCodes.NullProcessChain, "Process chain is null.", null));
                 return null;
             }
 
@@ -64,10 +64,10 @@ namespace SAM.Analytical.Systems.Mollier
 
             // Cap the supply intake with an explicit fresh-air junction so the outside-air boundary is not left
             // dangling. A supply-only chain has no extract discharge, so no exhaust junction is added.
-            AddBoundaryJunction(systemPlantRoom, airSystem, firstComponent, SAM.Core.Direction.In, "Junction Fresh Air");
+            AddBoundaryJunction(systemPlantRoom, airSystem, firstComponent, SAM.Core.Direction.In, "Junction Fresh Air", diagnostics);
 
             // Promote to a drawable display plant room (falls back to logical when no symbol library is present).
-            return ToDisplaySystemPlantRoom(systemPlantRoom);
+            return ToDisplaySystemPlantRoom(systemPlantRoom, diagnostics);
         }
 
         /// <summary>
@@ -98,7 +98,7 @@ namespace SAM.Analytical.Systems.Mollier
 
             if (mollierGroup == null)
             {
-                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error, DiagnosticCodes.ChainEmpty, "Mollier group is null.", null));
+                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error, DiagnosticCodes.NullProcessChain, "Mollier group is null.", null));
                 return null;
             }
 

@@ -22,7 +22,7 @@ namespace SAM.Analytical.Systems.Mollier
         /// all on the single <paramref name="airSystem"/>. The room is created from the Mollier room condition
         /// point. Mirrors the object graph of the reference room/group plant room.
         /// </summary>
-        private static void AddRoom(SystemPlantRoom systemPlantRoom, AirSystem airSystem, ISystemComponent supplyDischarge, ISystemComponent extractIntake, MollierPoint roomPoint)
+        private static void AddRoom(SystemPlantRoom systemPlantRoom, AirSystem airSystem, ISystemComponent supplyDischarge, ISystemComponent extractIntake, MollierPoint roomPoint, List<ConversionDiagnostic> diagnostics)
         {
             if (systemPlantRoom == null || airSystem == null || supplyDischarge == null || extractIntake == null)
             {
@@ -44,15 +44,15 @@ namespace SAM.Analytical.Systems.Mollier
             SystemAirJunction groupJunctionExtract = new SystemAirJunction("Group Junction");
 
             // supplyDischarge.Out -> Group Junction.In
-            systemPlantRoom.Connect(supplyDischarge, groupJunctionSupply, out _, airSystem, supplyOutIndex, RoomInIndex);
+            CheckConnect(systemPlantRoom.Connect(supplyDischarge, groupJunctionSupply, out _, airSystem, supplyOutIndex, RoomInIndex), supplyDischarge, groupJunctionSupply, diagnostics);
             // Group Junction.Out -> Damper.In
-            systemPlantRoom.Connect(groupJunctionSupply, systemDamper, out _, airSystem, RoomOutIndex, RoomInIndex);
+            CheckConnect(systemPlantRoom.Connect(groupJunctionSupply, systemDamper, out _, airSystem, RoomOutIndex, RoomInIndex), groupJunctionSupply, systemDamper, diagnostics);
             // Damper.Out -> Room.In
-            systemPlantRoom.Connect(systemDamper, systemSpace, out _, airSystem, RoomOutIndex, RoomInIndex);
+            CheckConnect(systemPlantRoom.Connect(systemDamper, systemSpace, out _, airSystem, RoomOutIndex, RoomInIndex), systemDamper, systemSpace, diagnostics);
             // Room.Out -> Group Junction.In
-            systemPlantRoom.Connect(systemSpace, groupJunctionExtract, out _, airSystem, RoomOutIndex, RoomInIndex);
+            CheckConnect(systemPlantRoom.Connect(systemSpace, groupJunctionExtract, out _, airSystem, RoomOutIndex, RoomInIndex), systemSpace, groupJunctionExtract, diagnostics);
             // Group Junction.Out -> extractIntake.In
-            systemPlantRoom.Connect(groupJunctionExtract, extractIntake, out _, airSystem, RoomOutIndex, extractInIndex);
+            CheckConnect(systemPlantRoom.Connect(groupJunctionExtract, extractIntake, out _, airSystem, RoomOutIndex, extractInIndex), groupJunctionExtract, extractIntake, diagnostics);
         }
 
         /// <summary>
@@ -76,7 +76,7 @@ namespace SAM.Analytical.Systems.Mollier
         /// Junctions) once they have been laid out, and relates it to the air system and those items. No-ops when the
         /// room-side items carry no display geometry (logical fallback, e.g. no symbol library).
         /// </summary>
-        private static void AddDisplayAirSystemGroup(SystemPlantRoom systemPlantRoom, AirSystem airSystem)
+        private static void AddDisplayAirSystemGroup(SystemPlantRoom systemPlantRoom, AirSystem airSystem, List<ConversionDiagnostic> diagnostics)
         {
             if (systemPlantRoom == null || airSystem == null)
             {
@@ -128,8 +128,24 @@ namespace SAM.Analytical.Systems.Mollier
             DisplayAirSystemGroup displayAirSystemGroup = new DisplayAirSystemGroup(new AirSystemGroup(airSystem.Name), groupBoundingBox2D);
 
             systemPlantRoom.Add(displayAirSystemGroup);
-            systemPlantRoom.Connect(airSystem, displayAirSystemGroup);
-            systemPlantRoom.Connect(displayAirSystemGroup, members);
+
+            bool groupConnected = systemPlantRoom.Connect(airSystem, displayAirSystemGroup);
+            if (!groupConnected && diagnostics != null)
+            {
+                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Warning, DiagnosticCodes.ConnectionFailed, $"Failed to connect air system '{airSystem.Name}' to display group '{displayAirSystemGroup.Name}'.", null));
+            }
+
+            List<bool> memberConnections = systemPlantRoom.Connect(displayAirSystemGroup, members);
+            if (memberConnections != null && diagnostics != null)
+            {
+                for (int i = 0; i < memberConnections.Count && i < members.Count; i++)
+                {
+                    if (!memberConnections[i])
+                    {
+                        diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Warning, DiagnosticCodes.ConnectionFailed, $"Failed to connect display group '{displayAirSystemGroup.Name}' to '{ComponentName(members[i])}'.", null));
+                    }
+                }
+            }
         }
 
         /// <summary>
