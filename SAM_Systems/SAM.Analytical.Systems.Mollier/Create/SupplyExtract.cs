@@ -15,8 +15,9 @@ namespace SAM.Analytical.Systems.Mollier
         /// sharing a single heat-recovery exchanger across both air paths (e.g. a twin-wheel unit).
         /// </summary>
         /// <remarks>
-        /// The supply chain is wired onto a supply <see cref="AirSystem"/> and the extract chain onto an
-        /// extract <see cref="AirSystem"/>. A <see cref="SystemExchanger"/> exposes two air paths (connection
+        /// Both the supply chain and the extract chain are wired onto a single, shared <see cref="AirSystem"/> —
+        /// one combined <see cref="AirSystem"/> carries both sides of the AHU (supply and extract), not two
+        /// separate supply/extract systems. A <see cref="SystemExchanger"/> exposes two air paths (connection
         /// indexes 1 and 2); when both chains contain heat-recovery processes, the supply-side exchanger
         /// instances are reused on the extract side, paired in order. Because <see cref="SystemPlantRoom.Connect"/>
         /// auto-selects the first unconnected connector pair, the supply chain consumes air path 1 and the

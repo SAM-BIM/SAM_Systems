@@ -247,14 +247,18 @@ Derive humidifier properties from Mollier process states.
 **Modified file:** `Create/SystemComponent.cs` — set humidifier Setpoint, Effectiveness, Duty
 
 **Key logic:**
-- `SystemSprayHumidifier`: Setpoint = End dry-bulb, Effectiveness = (W_end − W_start) / (W_sat − W_start) clamped [0,1]
-- `SystemSteamHumidifier`: Setpoint = End dry-bulb, Duty = |ṁ·(h_end−h_start)| when isothermal
+- `SystemSprayHumidifier`: Setpoint = End **relative humidity** [%, 0–100] (not dry-bulb), Effectiveness = (W_end − W_start) / (W_sat − W_start) clamped [0,1]
+- `SystemSteamHumidifier`: Setpoint = End **relative humidity** [%, 0–100] (not dry-bulb), Duty = |ṁ·(h_end−h_start)| computed **unconditionally** — the isothermality gate (`|ΔT|<0.01`) was removed: library-built steam processes are near-isothermal but not exactly so (injected steam carries sensible heat, ΔT ≈ +0.3 K), so the gate never fired and Duty was never set
 - WaterFlowCapacity (spray) = ṁ·(W_end − W_start) [kg/s]
 - Use `MollierPoint.SaturationMollierPoint()` for W_sat
+- Setpoint is relative humidity (not dry-bulb or humidity ratio) because SAM humidifier
+  setpoints pass straight through to Tas TPD (`SAM_Tas Convert.ToTPD` maps
+  `SprayHumidifier`/`SteamHumidifier` setpoints verbatim) and TPD humidifiers control
+  downstream %RH under their default flags
 
 **Acceptance:**
-- Spray humidifier Setpoint and Effectiveness set
-- Steam humidifier Setpoint and Duty set
+- Spray humidifier Setpoint (relative humidity) and Effectiveness set
+- Steam humidifier Setpoint (relative humidity) and Duty set
 - Tests verify against hand-calculated psychrometrics
 
 ---
@@ -269,12 +273,21 @@ Compute fan pressure rise from temperature pickup.
 
 **Key logic:**
 - ΔT = End.DryBulb − Start.DryBulb
-- ΔP = ρ_inlet · cp_air(1010 J/kg·K) · ΔT / η_fan (default η_fan = 0.7)
-- `SystemFan.DesignFlowRate` from designAirflow [m³/s]
+- ΔP = η_fan · ρ_inlet · cp_air · ΔT (default η_fan = 0.7) — **efficiency multiplies**,
+  not divides. This is the exact inverse of `SAM.Core.Mollier Query.PickupTemperature`
+  (ΔT = SFP/(ρ·cp), SFP = ΔP/η), so `ΔP == η_fan · SFP · 1000` [Pa] regardless of inlet
+  state. (An earlier `ΔP = ρ·cp·ΔT/η_fan` formulation had efficiency dividing, which
+  overstates pressure by a factor of 1/η².)
+- `cp_air` is read from `SAM.Core.Mollier Query.SpecificHeatCapacity_Air(start)`
+  (returned in kJ/kg·K, ×1000 for J/kg·K) — **not** a hardcoded 1010 constant
+- `SystemFan.DesignFlowRate` = designAirflow [m³/s] × 1000, i.e. **litres per second**,
+  with `DesignFlowType = FlowRateType.Value` (Tas TPD fan flow values are l/s; SFP
+  itself is W/(l/s); TPD template code uses values like `DesignFlowRate.Value = 150`)
 
 **Acceptance:**
 - Fan pressure and efficiency set when FanProcess has valid states
-- NaN return when states invalid or ΔT ≤ 0
+- NaN return when process/states/efficiency are invalid, or ΔT ≤ 0, or inlet density/cp
+  are unavailable
 
 ---
 
@@ -306,10 +319,22 @@ Auto-generate minimal liquid systems when no template provided.
 - Wire coil liquid connectors to corresponding system
 
 **Acceptance:**
-- Output `SystemEnergyCentre` has `SystemEnergySource` entries when coils present
-- Coil liquid connectors wired to plant
-- Does NOT overwrite user-provided template
-- Graceful fallback when no template and no coils (MOLLIER-011)
+- Output `SystemEnergyCentre` has `SystemEnergySource` entries when coils present —
+  **delivered**: a `SystemEnergySource` "Natural Gas" (CO2Factor 0.216, PeakCost 0.05,
+  PEF 0) is added when a boiler is injected, and an `ElectricalEnergySource` "Grid
+  Supplied Electricity" (CO2Factor 0.519, PeakCost 0.13, PEF 0) when a chiller is
+  injected — values mirror the reference `MVRE.json` project. The boiler/chiller are
+  stamped with `SystemObjectParameter.EnergySourceName` (chiller also gets
+  `FanEnergySourceName`) so `SAM_Tas` can resolve the matching `SystemEnergySource` by
+  name. Energy sources are added by the top-level entry points (they live on
+  `SystemEnergyCentre`, not the plant room), not by the injector itself.
+- Coil liquid connectors wired to plant, loop closed (plant equipment → coil → … → coil
+  → plant equipment)
+- Does NOT overwrite user-provided template — the template path skips injection
+  entirely
+- Graceful no-op when no template and no coils are present (nothing to inject; this is
+  not tied to MOLLIER-011, which in the delivered diagnostics contract means "MollierGroup
+  contains zero processes" — see Section N)
 
 ---
 
@@ -389,16 +414,19 @@ CreateComponent(process, airflow, out diagnostics):
                   component.BypassFactor = clamp((End.T-adp.T)/(Start.T-adp.T), 0, 1)
                   component.Duty = |ṁ·Δh|
 
-  // Fan: pressure from temperature rise
-  if Fan: ΔT = End.T - Start.T; ΔP = ρ·cp·ΔT/0.7; component.Pressure = ΔP; component.DesignFlowRate = airflow
+  // Fan: pressure from temperature rise (efficiency MULTIPLIES; cp from the inlet state, not a constant)
+  if Fan: ΔT = End.T - Start.T; if ΔT <= 0: ΔP = NaN
+          else: ΔP = 0.7·ρ(Start)·cp_air(Start)·ΔT
+          component.Pressure = ΔP; component.OverallEfficiency = 0.7
+          component.DesignFlowRate = airflow·1000 [l/s]; component.DesignFlowType = Value
 
-  // Spray humidifier: effectiveness
-  if SprayHumidifier: component.Setpoint = End.T;
+  // Spray humidifier: relative-humidity setpoint + effectiveness + water flow
+  if SprayHumidifier: component.Setpoint = End.RH [%]
       W_sat = saturation(End.T, Pressure); component.Effectiveness = clamp((End.W-Start.W)/(W_sat-Start.W), 0, 1)
+      component.WaterFlowCapacity = ṁ·(End.W-Start.W)
 
-  // Steam humidifier: duty when isothermal
-  if SteamHumidifier: component.Setpoint = End.T;
-      if |Start.T-End.T|<0.01: component.Duty = |ṁ·Δh|
+  // Steam humidifier: relative-humidity setpoint + duty (unconditional - see Corrections)
+  if SteamHumidifier: component.Setpoint = End.RH [%]; component.Duty = |ṁ·Δh|
 
   // Exchanger: setpoint + latent flag
   if Exchanger: component.Setpoint = End.T; Simple method/type;
@@ -511,35 +539,45 @@ public class ConversionDiagnostic
     public IMollierProcess SourceProcess { get; }
 }
 
+// Delivered constant names/meanings (Classes/ConversionDiagnostic.cs) — see Section N
+// for the canonical code table. Every code has exactly one meaning/severity across all
+// emission sites.
 public static class DiagnosticCodes
 {
-    public const string UnsupportedProcess    = "MOLLIER-001";
-    public const string NoStartState          = "MOLLIER-002";
-    public const string NoEndState            = "MOLLIER-003";
-    public const string NoDesignAirflow       = "MOLLIER-004";
-    public const string InvalidDensity        = "MOLLIER-005";
-    public const string BypassFactorClamped   = "MOLLIER-006";
-    public const string AdpUnavailable        = "MOLLIER-007";
-    public const string EfficiencyClamped     = "MOLLIER-008";
-    public const string ConnectFailed         = "MOLLIER-009";
-    public const string NoSymbolForType       = "MOLLIER-010";
-    public const string NoLiquidSystemTemplate= "MOLLIER-011";
-    public const string EmptyProcessChain     = "MOLLIER-012";
-    public const string DuplicateExchangerSkew= "MOLLIER-013";
+    public const string UnsupportedProcess               = "MOLLIER-001"; // Warning
+    public const string NullProcess                      = "MOLLIER-002"; // Warning
+    public const string InvalidProcessState               = "MOLLIER-003"; // Warning
+    public const string AirflowNaN                        = "MOLLIER-004"; // Warning
+    public const string NullProcessChain                  = "MOLLIER-005"; // Error
+    public const string ApparatusDewPointNotAvailable      = "MOLLIER-006"; // Info
+    public const string BypassFactorInvalid                = "MOLLIER-007"; // Info
+    public const string HeatRecoveryEfficiencyNotAvailable = "MOLLIER-008"; // Warning
+    public const string ConnectionFailed                   = "MOLLIER-009"; // Warning
+    public const string DisplaySymbolMissing                = "MOLLIER-010"; // Info
+    public const string NoProcessesInChain                 = "MOLLIER-011"; // Error
+    public const string ChainEmpty                         = "MOLLIER-012"; // Error
+    public const string HeatRecoveryCountMismatch           = "MOLLIER-013"; // Warning
+    public const string LiquidInjectionFailed               = "MOLLIER-014"; // Error
 }
 ```
 
 ### API Philosophy: Return null vs Throw vs Diagnostic
 
+Severities below are the canonical ones from Section N; that table governs.
+
 | Situation | Behavior |
 |-----------|----------|
-| `null` process or empty chain | Return `null` + `MOLLIER-012` |
+| `null` process chain or `MollierGroup` | Return `null` + `MOLLIER-005` Error |
+| `null` process within a chain | Skip + `MOLLIER-002` Warning, continue chain |
+| Chain produced no components | Return `null` + `MOLLIER-012` Error |
 | Unsupported process type | Skip + `MOLLIER-001` Warning, continue chain |
-| Invalid psychrometric state (NaN) | Skip + `MOLLIER-002`/`MOLLIER-003` Error |
+| Invalid psychrometric start/end state | Component created without derived values + `MOLLIER-003` Warning |
 | Cannot compute duty (NaN airflow) | Component created without duty + `MOLLIER-004` Warning |
-| Denominator ≈ 0 in bypass factor | By-pass = `NaN` + `MOLLIER-007` Warning |
-| Connector wiring fails | Skip connection + `MOLLIER-009` Error |
-| No symbol for display object | Skip display + `MOLLIER-010` Warning |
+| ADP unavailable | `MinimumOffcoil` unset + `MOLLIER-006` Info |
+| Denominator ≈ 0 in bypass factor | By-pass = `NaN`, unset + `MOLLIER-007` Info |
+| Connector wiring fails, or falls back to automatic selection | Continue + `MOLLIER-009` Warning |
+| No symbol for display object | Skip display + `MOLLIER-010` Info |
+| Liquid loop left partially wired | Continue + `MOLLIER-014` Error |
 
 ---
 
@@ -592,20 +630,32 @@ Not in scope. C# API enables scripting.
 
 ### Test Project: `SAM.Analytical.Systems.Mollier.Tests` (xunit, net8.0)
 
-| Test File | Tests | Expected Results |
-|-----------|-------|-----------------|
-| `SystemComponentTypeTests.cs` | FanProcess returns Fan NOT HeatingCoil; Heating→HeatingCoil; Cooling→CoolingCoil; each humidifier subtype→correct concrete; Mixing→AirJunction; Undefined/Specific→null; null→null | All pass |
-| `SystemComponentTests.cs` | Fan creates SystemFan; Heating sets Setpoint+Duty; Cooling sets Setpoint+BypassFactor+MinimumOffcoil+Duty; Exchanger sets LatentType when humidity shifts; adiabatic→SprayHumidifier; steam→SteamHumidifier; undefined→null; NaN airflow→component without duty | All pass |
-| `DutyTests.cs` | Known enthalpy pairs match hand calculation; zero Δh→0; NaN airflow→NaN; invalid state→NaN | All pass |
-| `BypassFactorTests.cs` | Result in [0,1]; matches hand calculation; zero denominator→NaN; clamp below zero→0; clamp above one→1; null→NaN | All pass |
-| `HeatRecoveryEfficiencyTests.cs` | Sensible in (0,1]; matches formula; latent when humidity changes; NaN when sensible-only; null→NaN | All pass |
-| `HumidifierPropertiesTests.cs` | Spray: effectiveness in [0,1]; Steam: duty matches |ṁ·Δh|; NaN when invalid | All pass |
-| `FanPressureTests.cs` | ΔP matches ρ·cp·ΔT/η; NaN when invalid state | All pass |
-| `SystemPlantRoomTests.cs` | Single chain: correct component count, Out→In direction walkable; empty chain→null; single component relates to air system; fresh-air/exhaust junctions present | All pass |
-| `SupplyExtractTests.cs` | Supply+extract share single AirSystem; shared exchanger has two air paths wired; efficiencies set; room Space/Damper/Group Junctions created; DisplayAirSystemGroup created | All pass |
-| `RoundTripTests.cs` | ToJson→FromJson preserves plant room count, component count, duties, bypass factor, exchanger efficiencies; display geometry survives round-trip | All pass |
-| `ConversionDiagnosticTests.cs` | MOLLIER-001 through MOLLIER-013 emitted correctly; severity levels correct | All pass |
-| `TasExportReadinessTests.cs` | All air components have In+Out; no dangling connectors except boundaries; JSON serializes; structural comparison to MVRE.json passes | All pass |
+**Delivered: 123 tests, all passing, 0 skipped, across 17 files** (verified by executed
+test run). Supersedes the original 11-file/30+-test estimate below — `HeatRecoveryEfficiencyTests.cs`,
+`HumidifierPropertiesTests.cs` and `FanPressureTests.cs` were planned but not yet written
+when this plan was first drafted; they now exist, and four more files were added beyond
+the original plan (`TwinWheelTopologyTests.cs`, `TwoRowLayoutTests.cs`, `LiquidLoopTests.cs`,
+`TwinWheelVerifyTests.cs`).
+
+| Test File | Count | Coverage | Expected Results |
+|-----------|------:|----------|-----------------|
+| `Create/SystemComponentTests.cs` | 13 | Fan returns SystemFan (tested before Heating, since FanProcess derives from it); Heating sets Setpoint+Duty; Cooling sets Setpoint+BypassFactor+MinimumOffcoil+Duty; fan sets efficiency+pressure+design flow rate; adiabatic→SprayHumidifier; steam→SteamHumidifier; Mixing→AirJunction; null/undefined→null; NaN airflow→component without duty | All pass |
+| `Create/SystemPlantRoomTests.cs` | 8 | Single chain: component count, AirSystem membership, connections present; empty chain→null; NaN airflow still wires; MollierGroup overload | All pass |
+| `Create/SupplyExtractTests.cs` | 7 | Supply+extract share a single AirSystem; shared exchanger is a single instance; heating coils present; room Space component; energy-centre creation; both chains empty→null | All pass |
+| `Create/TwinWheelTopologyTests.cs` | 6 | Exactly one AirSystem; exactly one shared exchanger; both air paths connected; sensible+latent efficiency set; fans have pressure+efficiency; exchanger survives JSON round-trip | All pass |
+| `Create/TwoRowLayoutTests.cs` | 6 | Exactly two rows used; supply row left-to-right; extract row placed in reverse; shared exchanger drawn once on the supply row; air connections routed between rows; short supply-only chain falls back to single row | All pass |
+| `Create/LiquidLoopTests.cs` | 8 | Exactly one boiler + one chiller injected; heating+cooling liquid systems created; coil liquid In/Out connected; boiler/chiller loops closed; boiler related to the heating system, chiller to the cooling system; energy sources created and linked by name; template path does not inject duplicate plant | All pass |
+| `Query/DutyTests.cs` | 7 | Known enthalpy pairs (heating, cooling) match hand calculation; scales with airflow; NaN airflow→NaN; null process→NaN; MassFlow valid/NaN cases | All pass |
+| `Query/BypassFactorTests.cs` | 5 | Result in [0,1]; matches hand calculation; NaN for null process; clamps to 0 and to 1; non-zero for partial cooling | All pass |
+| `Query/SystemComponentTypeTests.cs` | 9 | Heating→HeatingCoil; Cooling→CoolingCoil; Fan→Fan; HeatRecovery→Exchanger; adiabatic→SprayHumidifier; steam→SteamHumidifier; Mixing→AirJunction; null/Undefined→null | All pass |
+| `Query/HeatRecoveryEfficiencyTests.cs` | 4 | Efficiencies invert the factory percentages; sensible-only leaves latent NaN; null process leaves both NaN; efficiencies clamped to [0,1] | All pass |
+| `Query/HumidifierPropertiesTests.cs` | 10 | Spray AND steam setpoint = end-state relative humidity (not dry-bulb); spray effectiveness matches hand calculation; water-flow capacity matches mass balance; steam duty set unconditionally for library-built (near-isothermal) processes; negative humidity change clamps effectiveness to 0; saturated start (zero denominator) leaves effectiveness NaN; NaN airflow leaves flows NaN but still sets setpoint; null process leaves everything NaN | All pass |
+| `Query/FanPressureTests.cs` | 6 | Exact inverse of `PickupTemperature`; ΔP equals efficiency × specific fan power × 1000; matches hand calculation with efficiency multiplying; scales linearly with efficiency; NaN for invalid inputs; NaN for non-positive temperature rise | All pass |
+| `Json/RoundTripTests.cs` | 6 | ToJson→FromJson preserves heating-coil setpoint, cooling-coil bypass factor, fan pressure, plant-room component count, exchanger efficiency, humidifier concrete type | All pass |
+| `Diagnostics/ConversionDiagnosticTests.cs` | 15 | Every MOLLIER-001…014 code emitted at its trigger (unsupported process, NaN airflow, empty chain, null MollierGroup, null process chain, null process, invalid state, template overload, HR count mismatch, ADP/bypass-factor unavailable); severities correct; code format and meaning uniqueness | All pass |
+| `Integration/TasExportReadinessTests.cs` | 7 | PlantRoom has an AirSystem; all air components have In+Out connectors; no dangling connectors except boundaries; JSON serializes without exceptions and round-trips; JSON contains expected type identifiers; every connection has both endpoints; at least one AirSystem-typed connection | All pass |
+| `Integration/MVRE_ComparisonTests.cs` | 5 | Loads the real `MVRE.json` fixture (hard-fails with a clear message if not copied to test output — it is not silently skipped); plant-room counts; component-type counts (type-level, not count-for-count: MVRE's full liquid plant is not asserted against the bridge's minimal one); connector-type counts; air-side topology shape | All pass |
+| `Integration/TwinWheelVerifyTests.cs` | 1 | `TwinWheelExample.Verify()` returns true with every check line PASS | All pass |
 
 ---
 
@@ -666,21 +716,25 @@ Add `SAM.Analytical.Systems.Mollier.csproj` and `SAM.Analytical.Systems.Mollier.
 
 ## N. Diagnostics and Reporting
 
-| Code | Severity | Condition |
-|------|----------|-----------|
-| `MOLLIER-001` | Warning | Unsupported/undefined process skipped |
-| `MOLLIER-002` | Error | Process has no valid start state |
-| `MOLLIER-003` | Error | Process has no valid end state |
-| `MOLLIER-004` | Warning | No design airflow; duties unset |
-| `MOLLIER-005` | Error | Cannot compute inlet air density |
-| `MOLLIER-006` | Warning | Bypass factor clamped to bounds |
-| `MOLLIER-007` | Warning | ADP unavailable; bypass = NaN |
-| `MOLLIER-008` | Warning | Recovery effectiveness clamped |
-| `MOLLIER-009` | Error | Connector wiring failed |
-| `MOLLIER-010` | Warning | No display symbol for type |
-| `MOLLIER-011` | Info | No liquid system template; air-only |
-| `MOLLIER-012` | Error | Empty process chain |
-| `MOLLIER-013` | Warning | Supply/extract HR count mismatch |
+Canonical, as delivered (`Classes/ConversionDiagnostic.cs`) — each code has exactly one
+meaning and severity across every emission site in the bridge:
+
+| Code | Constant | Severity | Meaning |
+|------|----------|----------|---------|
+| `MOLLIER-001` | `UnsupportedProcess` | Warning | Process type maps to no system component; skipped |
+| `MOLLIER-002` | `NullProcess` | Warning | Null process encountered; skipped |
+| `MOLLIER-003` | `InvalidProcessState` | Warning | Process start or end MollierPoint null/invalid; derived setpoints and duties not set |
+| `MOLLIER-004` | `AirflowNaN` | Warning | Design airflow is NaN; duties/flows not set |
+| `MOLLIER-005` | `NullProcessChain` | Error | Process chain or MollierGroup argument is null |
+| `MOLLIER-006` | `ApparatusDewPointNotAvailable` | Info | ADP could not be computed; MinimumOffcoil not set |
+| `MOLLIER-007` | `BypassFactorInvalid` | Info | Bypass factor NaN/invalid; not set |
+| `MOLLIER-008` | `HeatRecoveryEfficiencyNotAvailable` | Warning | Paired heat-recovery processes yielded no usable sensible or latent effectiveness |
+| `MOLLIER-009` | `ConnectionFailed` | Warning | Connector operation failed, or directional wiring fell back to automatic selection |
+| `MOLLIER-010` | `DisplaySymbolMissing` | Info | No display symbol / no symbol library; display promotion skipped the component |
+| `MOLLIER-011` | `NoProcessesInChain` | Error | MollierGroup contains zero processes |
+| `MOLLIER-012` | `ChainEmpty` | Error | Chain produced zero system components |
+| `MOLLIER-013` | `HeatRecoveryCountMismatch` | Warning | Supply/extract heat-recovery counts differ; surplus gets its own exchanger |
+| `MOLLIER-014` | `LiquidInjectionFailed` | Error | Liquid injection failed or the loop was left partially wired |
 
 ---
 
@@ -700,6 +754,11 @@ Add `SAM.Analytical.Systems.Mollier.csproj` and `SAM.Analytical.Systems.Mollier.
 ---
 
 ## P. AI Implementation Prompt Sequence
+
+> **Historical record — do not implement from this section.** These are the original prompts as issued,
+> retained to show how the work was commissioned. Several carry the pre-audit errors corrected in
+> Section R (notably Prompt 4's `ΔP = ρ·cp·ΔT/η` with a hardcoded `1010`, and the dry-bulb humidifier
+> setpoints). Where they conflict with Sections E, F, N or R, those sections govern.
 
 ### Prompt 1: Branch Setup & Solution Registration
 ```
@@ -878,13 +937,13 @@ Commit: "feat(mollier-bridge): diagnostics, humidifier/fan derivation, two-row l
 
 | PR #8 Has | This Plan Adds |
 |-----------|----------------|
-| Working core bridge | Structured diagnostics (severity levels, codes) |
-| `List<string>` reports | Typed `ConversionDiagnostic` + `ConversionResult` |
+| Working core bridge | Structured diagnostics (severity levels, canonical codes) |
+| `List<string>` reports | Typed `ConversionDiagnostic` + `out` overloads on every entry point |
 | `SystemHumidifier` abstract | Humidifier setpoint/effectiveness/duty derivation |
 | Fan creates `SystemFan` | Fan pressure derivation from ΔT |
 | Single-row auto-layout | Two-row layout for supply+extract |
-| Template merge | Auto-injection of minimal liquid systems |
-| `TwinWheelExample` self-check | Full xunit test suite (30+ tests across 11 files) |
+| Template merge | Auto-injection of minimal liquid systems + default energy sources |
+| `TwinWheelExample` self-check | Full xunit test suite (123 tests across 17 files) |
 | Informal build | `build.ps1`, `test.ps1`, solution registration |
 | — | Tas export structural validation tests |
 
@@ -896,7 +955,10 @@ Commit: "feat(mollier-bridge): diagnostics, humidifier/fan derivation, two-row l
 - **Quarterly cadence:** Open `sow/2026-Q3` from `master` at quarter start. Work entire quarter on this branch.
 - **End of quarter:** Raise PR from `sow/2026-Q3` to upstream `HoareLea/master`.
 - **Current state:** PR #8 merged into `sow/2026-Q3` via fast-forward. SAM_Mollier and SAM are on `sow/2026-Q3`.
-- **Q3 delivery:** All 10 phases delivered. Commit `46d08f6` on `feature/mollier-bridge-enhancements`.
+- **Q3 delivery:** All 10 phases delivered. 12 commits on `feature/mollier-bridge-enhancements`,
+  starting with `46d08f6` (the initial P1–P10 delivery) and continuing through a later
+  diagnostics-contract, physics-correction and test-suite audit (see the Corrections
+  note at the end of this document).
 
 ---
 
@@ -927,27 +989,100 @@ Commit: "feat(mollier-bridge): diagnostics, humidifier/fan derivation, two-row l
 | `docs/Mollier-Systems-Bridge.md` | Updated with P4-P9 features, 3 worked examples, file listing |
 | `docs/mollier_processes_to_systems_IMPLEMENTATION_PLAN.md` | This document — delivery status recorded |
 
-### New Files Delivered (21 files)
+### New Files Delivered (24 files)
+
+*Corrected count — verified against `git diff --name-status sow/2026-Q3...feature/mollier-bridge-enhancements`.
+`Classes/ConversionResult.cs` (listed here previously) was created and later deleted
+within this branch, so it nets to neither added nor modified and is not shipped; see the
+Corrections note below.*
 
 | Directory | Files |
 |-----------|-------|
 | `SAM.Analytical.Systems.Mollier/Query/` | `FanPressure.cs`, `HumidifierProperties.cs` |
 | `SAM.Analytical.Systems.Mollier/Create/` | `LiquidSystem.cs` |
-| `SAM.Analytical.Systems.Mollier/Classes/` | `ConversionDiagnostic.cs`, `ConversionResult.cs` |
-| `SAM.Analytical.Systems.Mollier.Tests/` | `.csproj`, 10 test `.cs` files, 2 integration `.cs` files, 1 verify `.cs` file |
+| `SAM.Analytical.Systems.Mollier/Classes/` | `ConversionDiagnostic.cs` |
+| `SAM.Analytical.Systems.Mollier.Tests/` | `.csproj` + 17 test `.cs` files: `Create/LiquidLoopTests.cs`, `Create/SupplyExtractTests.cs`, `Create/SystemComponentTests.cs`, `Create/SystemPlantRoomTests.cs`, `Create/TwinWheelTopologyTests.cs`, `Create/TwoRowLayoutTests.cs`, `Diagnostics/ConversionDiagnosticTests.cs`, `Integration/MVRE_ComparisonTests.cs`, `Integration/TasExportReadinessTests.cs`, `Integration/TwinWheelVerifyTests.cs`, `Json/RoundTripTests.cs`, `Query/BypassFactorTests.cs`, `Query/DutyTests.cs`, `Query/FanPressureTests.cs`, `Query/HeatRecoveryEfficiencyTests.cs`, `Query/HumidifierPropertiesTests.cs`, `Query/SystemComponentTypeTests.cs` |
 | Root | `build.ps1`, `test.ps1` |
 
-### Modified Files (10 files)
+### Modified Files (15 files)
 
 | File | Change |
 |------|--------|
+| `.gitignore` | Build/test output ignores |
+| `Grasshopper/SAM.Analytical.Grasshopper.Systems/Component/SAMAnalyticalSystemResults.cs` | Unrelated compatibility fix (MinCompatibleVersion/ObsoleteSeverity, SPDX header) — not part of the Mollier bridge feature |
 | `SAM_Systems.sln` | Added test project |
-| `Create/SystemComponent.cs` | Fan pressure + efficiency, humidifier properties, diagnostics |
-| `Create/SystemEnergyCentre.cs` | Liquid injection, diagnostics |
-| `Create/SystemEnergyCentreByTemplate.cs` | Liquid injection when template=null |
+| `Create/OutsideAirJunction.cs` | `AddBoundaryJunction` gained a diagnostics parameter |
+| `Create/RoomGroup.cs` | `AddRoom`/`AddDisplayAirSystemGroup` gained a diagnostics parameter |
 | `Create/SupplyExtract.cs` | Liquid injection, diagnostics |
-| `Create/DisplaySystemEnergyCentre.cs` | Two-row supply/extract layout |
-| `Classes/ConversionDiagnostic.cs` | MOLLIER-014 code |
-| `Example/TwinWheelExample.cs` | Air-side-only display checks |
-| `docs/Mollier-Systems-Bridge.md` | Full update (370 lines) |
-| `docs/mollier_processes_to_systems_IMPLEMENTATION_PLAN.md` | Delivery status (this section) |
+| `Create/SystemComponent.cs` | Fan pressure + efficiency, humidifier properties, diagnostics |
+| `Create/SystemEnergyCentre.cs` | Liquid injection, diagnostics, energy-source attachment |
+| `Create/SystemEnergyCentreByResult.cs` | Diagnostics overload |
+| `Create/SystemEnergyCentreByTemplate.cs` | Liquid injection + energy-source attachment when template=null |
+| `Create/SystemPlantRoom.cs` | Diagnostics overload |
+| `Example/TwinWheelExample.cs` | Air-side-only display checks; `FanProcessBySpecificFanPower` workaround for the upstream `Create.FanProcess` defect |
+| `SAM.Analytical.Systems/Create/DisplaySystemEnergyCentre.cs` | Two-row supply/extract layout |
+| `docs/Mollier-Systems-Bridge.md` | Full update — diagnostics, physics and file/test-count corrections |
+| `docs/mollier_processes_to_systems_IMPLEMENTATION_PLAN.md` | Delivery status (this section) + Corrections note |
+
+---
+
+## R. Corrections (2026-07-17)
+
+A documentation and code audit against the delivered `feature/mollier-bridge-enhancements`
+branch (12 commits) found this plan had drifted from the implementation in several
+places. Summary of what changed and why, for anyone reconciling earlier discussions
+against the current document:
+
+- **Fan efficiency placement was inverted.** The plan (Phase 4, Section F) and the
+  originally-delivered code both had `ΔP = ρ·cp·ΔT/η_fan` (efficiency dividing). This
+  overstates pressure by a factor of `1/η²` and is physically backwards — a less
+  efficient fan should yield a *smaller* recoverable pressure for a given temperature
+  pickup, not a larger one. Corrected to `ΔP = η_fan·ρ·cp·ΔT` (efficiency multiplying),
+  the exact inverse of `SAM.Core.Mollier Query.PickupTemperature`. `cp_air` is also no
+  longer a hardcoded `1010 J/kg·K`; it is read from the process's own inlet state via
+  `Query.SpecificHeatCapacity_Air`.
+- **Humidifier setpoint units were wrong.** The plan and the originally-delivered code
+  set `Setpoint = End.DryBulbTemperature` for both spray and steam humidifiers (and an
+  earlier draft of this plan described the spray setpoint as a target humidity ratio).
+  Neither matches how Tas TPD actually consumes the setpoint: `SAM_Tas Convert.ToTPD`
+  passes humidifier setpoints straight through, and TPD humidifiers control downstream
+  **relative humidity** under their default flags. Corrected to
+  `Setpoint = End.RelativeHumidity` [%, 0–100] for both humidifier types.
+- **The steam duty isothermality gate was dead code.** The plan and original
+  implementation only set `SystemSteamHumidifier.Duty` when `|ΔT| < 0.01`. Library-built
+  `SteamHumidificationProcess`s are near-isothermal but not exactly so (injected steam
+  carries sensible heat, ΔT ≈ +0.3 K), so this gate never fired and Duty was never set in
+  practice. The gate has been removed; duty is now computed unconditionally.
+- **Diagnostic codes have been realigned to the delivered contract.** The plan's Section
+  G/N code list (drafted before implementation) named and numbered several codes
+  differently from what was actually built (e.g. separate `NoStartState`/`NoEndState`
+  vs. the single delivered `InvalidProcessState`; `NoLiquidSystemTemplate` vs. the
+  delivered `LiquidInjectionFailed`; several severities differed). Sections G and N now
+  reproduce the canonical, delivered `DiagnosticCodes` table verbatim (MOLLIER-001…014).
+- **`ConversionResult` was removed.** It was created during the initial delivery but
+  never constructed or referenced anywhere in the bridge or its tests, and has been
+  deleted as dead code. The diagnostics API is the `out List<ConversionDiagnostic>`
+  overloads, which now exist on every top-level entry point, including the
+  template-based and `AirHandlingUnitResult`-based ones (old signatures preserved as
+  wrappers).
+- **Default energy sources were added.** Phase 6's acceptance criterion ("output has
+  `SystemEnergySource` entries") was not yet true when this plan's delivery status
+  (Section Q) was first recorded. It is now: template-less liquid injection adds a
+  `SystemEnergySource` "Natural Gas" and an `ElectricalEnergySource` "Grid Supplied
+  Electricity" (values mirroring `MVRE.json`) at the energy-centre level.
+- **The MVRE comparison fixture was never actually loaded.** The original comparison
+  test had a fixture-resolution gap, so the comparison against `MVRE.json` was not
+  genuinely exercised. `Integration/MVRE_ComparisonTests.cs` now resolves the fixture
+  from the test output directory and hard-fails with a clear message if it is not
+  present, rather than silently passing without comparing anything. The comparison
+  itself remains intentionally type-level/air-side structural, not count-for-count — see
+  the Limitations section of `docs/Mollier-Systems-Bridge.md`.
+- **Test suite grew from the planned 11 files / 30+ tests to 17 files / 123 tests**
+  (Section K), all passing, 0 skipped.
+- **File counts corrected:** 24 files added / 15 modified vs. `sow/2026-Q3` (Section Q
+  had recorded 21 new / 10 modified); 12 commits on the branch (Section Q had recorded a
+  single commit `46d08f6`, which is in fact the first of the 12).
+
+This note supplements, and does not replace, Section Q's delivery-status table, which
+remains a dated snapshot (2026-07-10) of the original P1–P10 delivery and is left as-is
+pending a final verification pass.
