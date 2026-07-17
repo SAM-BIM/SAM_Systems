@@ -31,6 +31,9 @@ namespace SAM.Analytical.Systems.Mollier
         /// <summary>Default design extract airflow used by the example [m3/s].</summary>
         public const double DefaultExtractAirflow = 2.3;
 
+        /// <summary>Design specific fan power of both example fans [W/(l/s)].</summary>
+        public const double SpecificFanPower = 0.8;
+
         /// <summary>
         /// Builds the supply and extract Mollier process chains for the twin-wheel AHU.
         /// Each process starts where the previous one ended (process.End -> next process.Start).
@@ -45,15 +48,34 @@ namespace SAM.Analytical.Systems.Mollier
             HeatRecoveryProcess supplyHeatRecovery = outdoor.HeatRecoveryProcess_Supply(room, 75, 65); // sensible 75%, latent 65%
             CoolingProcess cooling = supplyHeatRecovery.End.CoolingProcess(13, 0.85);               // off-coil 13 C, efficiency 0.85
             HeatingProcess reheat = cooling.End.HeatingProcess(16);                                 // reheat to 16 C
-            FanProcess supplyFan = reheat.End.FanProcess(0.8);                                      // specific fan temperature rise
+            FanProcess supplyFan = FanProcessBySpecificFanPower(reheat.End, SpecificFanPower);
 
             supplyMollierProcesses = new List<IMollierProcess> { supplyHeatRecovery, cooling, reheat, supplyFan };
 
             // Extract chain: same wheel (exhaust side) -> extract fan.
             HeatRecoveryProcess extractHeatRecovery = room.HeatRecoveryProcess_Extract(outdoor, 75, 65);
-            FanProcess extractFan = extractHeatRecovery.End.FanProcess(0.8);
+            FanProcess extractFan = FanProcessBySpecificFanPower(extractHeatRecovery.End, SpecificFanPower);
 
             extractMollierProcesses = new List<IMollierProcess> { extractHeatRecovery, extractFan };
+        }
+
+        /// <summary>
+        /// Builds a fan process whose air temperature rise corresponds to <paramref name="specificFanPower"/>.
+        /// </summary>
+        /// <remarks>
+        /// SAM.Core.Mollier <c>Create.FanProcess(MollierPoint, double)</c> assigns the pickup temperature - a
+        /// RISE in K, sfp / (rho * cp) - as the End point's ABSOLUTE dry-bulb temperature, so a fan entering at
+        /// 16 C leaves at 0.65 C: a negative temperature rise from which no fan pressure can be recovered. (Its
+        /// four-argument sibling correctly adds the pickup to the inlet temperature.) Until that is corrected
+        /// upstream, the End state is built here from the sound <c>Query.PickupTemperature(MollierPoint, sfp)</c>
+        /// rise, which keeps the example physically meaningful and lets the bridge derive
+        /// <c>SystemFan.Pressure</c> = eta * sfp * 1000 [Pa].
+        /// </remarks>
+        private static FanProcess FanProcessBySpecificFanPower(MollierPoint start, double specificFanPower)
+        {
+            double pickupTemperature = start.PickupTemperature(specificFanPower);
+
+            return start.FanProcess_ByDryBulbTemperature(start.DryBulbTemperature + pickupTemperature);
         }
 
         /// <summary>
