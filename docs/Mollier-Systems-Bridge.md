@@ -443,17 +443,6 @@ and a `SystemFan`. A `Junction Fresh Air` boundary caps the intake.
   controllers, sensors, a PV panel) that the bridge's auto-injected liquid loop (a single
   `SystemBoiler`/`SystemAirSourceChiller` pair, see above) does not attempt to reproduce;
   only the air side is compared.
-- **Upstream `SAM_Mollier` `Create.FanProcess(MollierPoint, double)` defect.** The
-  two-argument overload assigns the pickup *rise* as the End point's *absolute* dry-bulb
-  temperature instead of adding it to the inlet temperature (a 16 °C inlet ends up around
-  0.65 °C — a negative temperature rise, from which `Query.FanPressureRise` cannot
-  recover a pressure). The four-argument sibling does not have this problem. This is a
-  known upstream defect, to be fixed in `SAM_Mollier` separately. Until then, code that
-  needs a physically valid fan pressure rise from a specific fan power should build the
-  End state itself from `Query.PickupTemperature(MollierPoint, sfp)` added to the inlet
-  temperature — see the private `FanProcessBySpecificFanPower` helper in
-  `Example/TwinWheelExample.cs` for the pattern. With that workaround both example fans
-  correctly yield 560 Pa (= 0.7 × 0.8 × 1000, i.e. `η · SFP · 1000`).
 
 ## Status / TODO
 
@@ -468,7 +457,9 @@ and a `SystemFan`. A `Junction Fresh Air` boundary caps the intake.
   paths (twin-wheel), exposed via optional GH inputs.
 - ✅ Worked example + framework-free self-check `TwinWheelExample` (in the bridge
   assembly) and a `SAMSystems.MollierTwinWheelExample` GH node that builds the example
-  and reports PASS/FAIL checks.
+  and reports PASS/FAIL checks. Both example fans are built with `SAM.Core.Mollier`'s
+  standard `start.FanProcess(specificFanPower)` factory, which correctly adds the
+  pickup temperature to the inlet dry-bulb.
 - ✅ Fan pressure derivation (`Query.FanPressureRise`) — `ΔP = η·ρ·cp·ΔT` from the ΔT
   pickup across a `FanProcess` (efficiency multiplies), using SAM.Core.Mollier's own
   inlet-state `cp` (not a hardcoded constant); the exact inverse of `Query.PickupTemperature`.

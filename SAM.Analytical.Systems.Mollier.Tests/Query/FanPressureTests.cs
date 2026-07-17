@@ -22,8 +22,6 @@ namespace SAM.Analytical.Systems.Mollier.Tests.Query
             // SAM.Core.Mollier's fan convention is dT = SFP / (rho * cp) with SFP = dP / eta, so recovering the
             // pressure from a temperature rise and converting it back to a specific fan power must return the
             // original rise exactly - rho and cp cancel because both evaluate at the same inlet state.
-            // (Note: Create.FanProcess(start, sfp) cannot be used to build the fixture - it assigns the pickup
-            // rise as the End point's absolute dry-bulb temperature; see TwinWheelExample.FanProcessBySpecificFanPower.)
             MollierPoint start = SAM.Core.Mollier.Create.MollierPoint_ByRelativeHumidity(20, 50, Pressure);
             const double deltaT = 1.0;
             FanProcess process = start.FanProcess_ByDryBulbTemperature(start.DryBulbTemperature + deltaT);
