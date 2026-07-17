@@ -1015,12 +1015,12 @@ Corrections note below.*
 | `SAM.Analytical.Systems.Mollier.Tests/` | `.csproj` + 17 test `.cs` files: `Create/LiquidLoopTests.cs`, `Create/SupplyExtractTests.cs`, `Create/SystemComponentTests.cs`, `Create/SystemPlantRoomTests.cs`, `Create/TwinWheelTopologyTests.cs`, `Create/TwoRowLayoutTests.cs`, `Diagnostics/ConversionDiagnosticTests.cs`, `Integration/MVRE_ComparisonTests.cs`, `Integration/TasExportReadinessTests.cs`, `Integration/TwinWheelVerifyTests.cs`, `Json/RoundTripTests.cs`, `Query/BypassFactorTests.cs`, `Query/DutyTests.cs`, `Query/FanPressureTests.cs`, `Query/HeatRecoveryEfficiencyTests.cs`, `Query/HumidifierPropertiesTests.cs`, `Query/SystemComponentTypeTests.cs` |
 | Root | `build.ps1`, `test.ps1` |
 
-### Modified Files (15 files)
+### Modified Files (18 files)
 
 | File | Change |
 |------|--------|
 | `.gitignore` | Build/test output ignores |
-| `Grasshopper/SAM.Analytical.Grasshopper.Systems/Component/SAMAnalyticalSystemResults.cs` | Unrelated compatibility fix (MinCompatibleVersion/ObsoleteSeverity, SPDX header) — not part of the Mollier bridge feature |
+| `Grasshopper/SAM.Analytical.Grasshopper.Systems/Component/SAMAnalyticalSystemResults.cs` | **Required** compatibility fix, not an unrelated change: SAM PR #36 (merged on SAM `sow/2026-Q3`) added `MinCompatibleVersion` and `ObsoleteSeverity` to `IGH_SAMComponent`, so without them this component does not implement the interface and `SAM_Systems.sln` does not compile against the target branch. Plus an SPDX header. |
 | `SAM_Systems.sln` | Added test project |
 | `Create/OutsideAirJunction.cs` | `AddBoundaryJunction` gained a diagnostics parameter |
 | `Create/RoomGroup.cs` | `AddRoom`/`AddDisplayAirSystemGroup` gained a diagnostics parameter |
@@ -1032,6 +1032,9 @@ Corrections note below.*
 | `Create/SystemPlantRoom.cs` | Diagnostics overload |
 | `Example/TwinWheelExample.cs` | Air-side-only display checks; `FanProcessBySpecificFanPower` workaround for the upstream `Create.FanProcess` defect |
 | `SAM.Analytical.Systems/Create/DisplaySystemEnergyCentre.cs` | Two-row supply/extract layout |
+| `SAM.Analytical.Systems/Classes/SystemComponent/SystemFan.cs` | XML unit docs only: `Pressure` [Pa], `OverallEfficiency` [0–1], `DesignFlowRate` [l/s] |
+| `SAM.Analytical.Systems/Classes/SystemComponent/SystemSprayHumidifier.cs` | XML unit docs only: `Setpoint` [%RH], `Effectiveness` [0–1], `WaterFlowCapacity` [kg/s] |
+| `SAM.Analytical.Systems/Classes/SystemComponent/SystemSteamHumidifier.cs` | XML unit docs only: `Setpoint` [%RH], `Duty` [W] |
 | `docs/Mollier-Systems-Bridge.md` | Full update — diagnostics, physics and file/test-count corrections |
 | `docs/mollier_processes_to_systems_IMPLEMENTATION_PLAN.md` | Delivery status (this section) + Corrections note |
 
@@ -1101,7 +1104,7 @@ against the current document:
   the Limitations section of `docs/Mollier-Systems-Bridge.md`.
 - **Test suite grew from the planned 11 files / 30+ tests to 17 files / 123 tests**
   (Section K), all passing, 0 skipped.
-- **File counts corrected:** 24 files added / 15 modified vs. `sow/2026-Q3` (Section Q
+- **File counts corrected:** 24 files added / 18 modified vs. `sow/2026-Q3` (Section Q
   had recorded 21 new / 10 modified). Section Q had also credited the delivery to the
   single commit `46d08f6`, which is in fact only the first on the branch; the exact
   commit count is kept in the PR description rather than here, where it would go stale
