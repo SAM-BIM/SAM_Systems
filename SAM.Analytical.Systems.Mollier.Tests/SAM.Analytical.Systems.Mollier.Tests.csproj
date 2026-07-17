@@ -51,6 +51,7 @@
 
   <ItemGroup>
     <None Include="..\files\resources\Analytical\Systems\SystemEnergyCentre\MVRE.json" Link="files\resources\Analytical\Systems\SystemEnergyCentre\MVRE.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\files\resources\Analytical\Systems\SystemEnergyCentre\Plantroom-Only.json" Link="files\resources\Analytical\Systems\SystemEnergyCentre\Plantroom-Only.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\files\resources\Analytical\Systems\SAM_DisplaySystemManager.JSON" Link="resources\Analytical\Systems\SAM_DisplaySystemManager.JSON" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
