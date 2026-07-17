@@ -955,10 +955,10 @@ Commit: "feat(mollier-bridge): diagnostics, humidifier/fan derivation, two-row l
 - **Quarterly cadence:** Open `sow/2026-Q3` from `master` at quarter start. Work entire quarter on this branch.
 - **End of quarter:** Raise PR from `sow/2026-Q3` to upstream `HoareLea/master`.
 - **Current state:** PR #8 merged into `sow/2026-Q3` via fast-forward. SAM_Mollier and SAM are on `sow/2026-Q3`.
-- **Q3 delivery:** All 10 phases delivered. 12 commits on `feature/mollier-bridge-enhancements`,
+- **Q3 delivery:** All 10 phases delivered on `feature/mollier-bridge-enhancements`,
   starting with `46d08f6` (the initial P1–P10 delivery) and continuing through a later
   diagnostics-contract, physics-correction and test-suite audit (see the Corrections
-  note at the end of this document).
+  note at the end of this document). The PR description carries the exact commit count.
 
 ---
 
@@ -1040,7 +1040,7 @@ Corrections note below.*
 ## R. Corrections (2026-07-17)
 
 A documentation and code audit against the delivered `feature/mollier-bridge-enhancements`
-branch (12 commits) found this plan had drifted from the implementation in several
+branch found this plan had drifted from the implementation in several
 places. Summary of what changed and why, for anyone reconciling earlier discussions
 against the current document:
 
@@ -1052,6 +1052,17 @@ against the current document:
   the exact inverse of `SAM.Core.Mollier Query.PickupTemperature`. `cp_air` is also no
   longer a hardcoded `1010 J/kg·K`; it is read from the process's own inlet state via
   `Query.SpecificHeatCapacity_Air`.
+- **Fan pressure was never actually set in the example.** Independently of the equation
+  above, both `TwinWheelExample` fans were being built by `SAM.Core.Mollier`'s
+  `Create.FanProcess(MollierPoint, double)`, which assigns the pickup temperature — a
+  *rise* in K — as the End point's *absolute* dry-bulb temperature. The supply fan
+  therefore ran 16 °C → 0.65 °C: a negative rise, for which `FanPressureRise` correctly
+  returns `NaN`, leaving `SystemFan.Pressure` at 0 and `OverallEfficiency` unset. The
+  originally-delivered test asserted only `NotNull` on the fan and noted the `NaN` in a
+  comment rather than investigating it, so the whole of Phase 4 was inert in practice.
+  The example now derives its fan End state from the sound
+  `Query.PickupTemperature(MollierPoint, sfp)` rise, and both fans yield exactly 560 Pa
+  (= η·SFP·1000). The upstream factory defect is left for a separate SAM_Mollier change.
 - **Humidifier setpoint units were wrong.** The plan and the originally-delivered code
   set `Setpoint = End.DryBulbTemperature` for both spray and steam humidifiers (and an
   earlier draft of this plan described the spray setpoint as a target humidity ratio).
@@ -1091,8 +1102,10 @@ against the current document:
 - **Test suite grew from the planned 11 files / 30+ tests to 17 files / 123 tests**
   (Section K), all passing, 0 skipped.
 - **File counts corrected:** 24 files added / 15 modified vs. `sow/2026-Q3` (Section Q
-  had recorded 21 new / 10 modified); 12 commits on the branch (Section Q had recorded a
-  single commit `46d08f6`, which is in fact the first of the 12).
+  had recorded 21 new / 10 modified). Section Q had also credited the delivery to the
+  single commit `46d08f6`, which is in fact only the first on the branch; the exact
+  commit count is kept in the PR description rather than here, where it would go stale
+  with the commit that records it.
 
 This note supplements, and does not replace, Section Q's delivery-status table, which
 remains a dated snapshot (2026-07-10) of the original P1–P10 delivery and is left as-is
