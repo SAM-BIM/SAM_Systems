@@ -962,32 +962,43 @@ Commit: "feat(mollier-bridge): diagnostics, humidifier/fan derivation, two-row l
 
 ---
 
-## Q. Delivery Status (2026-07-10)
+## Q. Delivery Status (verified 2026-07-17)
+
+A phase is marked complete only where its acceptance tests pass. Every row below was
+re-checked after the audit (Section R); the earlier 2026-07-10 status table marked all ten
+phases complete on the strength of code existing, while P3, P4 and P6 were in fact
+delivering wrong values and P5/P6 had no acceptance tests at all.
 
 ### Phase Completion
 
-| Phase | Description | Status | Files Created | Files Modified |
-|-------|------------|--------|--------------|---------------|
-| **P1** | Branch Setup & Solution Registration | ✅ Pre-existing (PR #8) | — | `SAM_Systems.sln` |
-| **P2** | Structured Diagnostics Model | ✅ Pre-existing (PR #8) + Enhanced (P6) | `Classes/ConversionDiagnostic.cs`, `Classes/ConversionResult.cs` | 4 Create files |
-| **P3** | Humidifier Setpoint Derivation | ✅ Pre-existing (PR #8) | `Query/HumidifierProperties.cs` | `Create/SystemComponent.cs` |
-| **P4** | Fan Pressure Derivation | ✅ Delivered | `Query/FanPressure.cs` | `Create/SystemComponent.cs` |
-| **P5** | Two-Row Layout | ✅ Delivered | — | `Create/DisplaySystemEnergyCentre.cs` |
-| **P6** | Liquid System Auto-Injection | ✅ Delivered | `Create/LiquidSystem.cs` | `Create/SystemEnergyCentre.cs`, `Create/SupplyExtract.cs`, `Create/SystemEnergyCentreByTemplate.cs` |
-| **P7** | Unit Test Project (62 → 75 tests) | ✅ Delivered | 11 test files + `.csproj` | `SAM_Systems.sln` |
-| **P8** | Tas Export Structural Validation | ✅ Delivered | `Integration/TasExportReadinessTests.cs`, `Integration/MVRE_ComparisonTests.cs` | — |
-| **P9** | Documentation & Examples | ✅ Delivered | — | `docs/Mollier-Systems-Bridge.md` |
-| **P10** | Build Script & Final Verification | ✅ Delivered | `build.ps1`, `test.ps1`, `Integration/TwinWheelVerifyTests.cs` | `Example/TwinWheelExample.cs` |
+| Phase | Description | Status | Acceptance evidence |
+|-------|------------|--------|---------------------|
+| **P1** | Branch Setup & Solution Registration | ✅ Complete | `build.ps1` builds all 3 solutions from clean checkouts, Debug and Release |
+| **P2** | Structured Diagnostics Model | ✅ Complete (contract rebuilt) | Canonical 14-code table in `Classes/ConversionDiagnostic.cs`, emitted at every failure path; `ConversionDiagnosticTests` (15). `ConversionResult` deleted as dead code |
+| **P3** | Humidifier Setpoint Derivation | ✅ Complete (semantics corrected) | Setpoint = end **relative humidity** [%]; steam duty gate removed. `HumidifierPropertiesTests` (10) |
+| **P4** | Fan Pressure Derivation | ✅ Complete (equation corrected) | ΔP = η·ρ·cp·ΔT. `FanPressureTests` (6) incl. the SFP invariant and efficiency-linearity |
+| **P5** | Two-Row Layout | ✅ Complete (now tested) | `TwoRowLayoutTests` (6): rows at y = 0 / −0.8, 1.0 column step, reversed extract row, exchanger drawn once, routed connections, single-row fallback |
+| **P6** | Liquid System Auto-Injection | ✅ Complete (energy sources added) | Closed loops + 2 default `SystemEnergySource`s linked by name. `LiquidLoopTests` (8) |
+| **P7** | Unit Test Project | ✅ Complete | **123 tests across 17 files**, 0 failed, 0 skipped, none returning early |
+| **P8** | Tas Export Structural Validation | ✅ Complete (fixture now loads) | `TasExportReadinessTests` (7) + `MVRE_ComparisonTests` (5) with `MVRE.json` provably loaded from the test output. Structural only — see Limitations |
+| **P9** | Documentation & Examples | ✅ Complete | Both documents corrected against the code; diagnostics table verified mechanically against `ConversionDiagnostic.cs` |
+| **P10** | Build Script & Final Verification | ✅ Complete | `test.ps1` now fails on a missing DLL, a failed Verify, or no matching tests; verified from clean worktrees |
 
-### Verification
+### Verification (clean worktrees, 2026-07-17)
+
+SAM and SAM_Mollier at `origin/sow/2026-Q3` (`1e8855c4`, `0fb6cc77`); SAM_Systems detached
+at the branch head.
 
 | Check | Result |
 |-------|--------|
-| `build.ps1` (SAM → SAM_Mollier → SAM_Systems) | All 3 solutions OK |
-| `dotnet test` | **75 passed, 0 failed, 0 skipped** |
-| `TwinWheelExample.Verify()` | 27/27 PASS lines |
-| `docs/Mollier-Systems-Bridge.md` | Updated with P4-P9 features, 3 worked examples, file listing |
-| `docs/mollier_processes_to_systems_IMPLEMENTATION_PLAN.md` | This document — delivery status recorded |
+| `build.ps1 -Configuration Debug` | SAM ✅ SAM_Mollier ✅ SAM_Systems ✅ — exit 0 |
+| `build.ps1 -Configuration Release` | SAM ✅ SAM_Mollier ✅ SAM_Systems ✅ — exit 0 |
+| `test.ps1 -Configuration Debug` | TESTS PASSED, TwinWheelExample.Verify PASSED — exit 0 |
+| `dotnet test` (Mollier bridge) | **123 passed, 0 failed, 0 skipped** |
+| `TwinWheelExample.Verify()` | **26/26 PASS lines**, 0 FAIL, display checks executed (not skipped) |
+| MVRE structural comparison | 5 passed, fixture loaded from `build_tests\net8.0\files\resources\...\MVRE.json` |
+| JSON round-trip | 10 passed |
+| Compiler warnings | 21 — identical to the base branch; no new warnings |
 
 ### New Files Delivered (24 files)
 
