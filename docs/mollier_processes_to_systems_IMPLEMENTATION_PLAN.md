@@ -1030,7 +1030,7 @@ Corrections note below.*
 | `Create/SystemEnergyCentreByResult.cs` | Diagnostics overload |
 | `Create/SystemEnergyCentreByTemplate.cs` | Liquid injection + energy-source attachment when template=null |
 | `Create/SystemPlantRoom.cs` | Diagnostics overload |
-| `Example/TwinWheelExample.cs` | Air-side-only display checks; `FanProcessBySpecificFanPower` workaround for the upstream `Create.FanProcess` defect |
+| `Example/TwinWheelExample.cs` | Air-side-only display checks. Its fans were built through a temporary `FanProcessBySpecificFanPower` workaround for an upstream `Create.FanProcess` defect; since that defect was corrected in SAM_Mollier (see Section S), the example calls the standard `start.FanProcess(specificFanPower)` factory directly. |
 | `SAM.Analytical.Systems/Create/DisplaySystemEnergyCentre.cs` | Two-row supply/extract layout |
 | `SAM.Analytical.Systems/Classes/SystemComponent/SystemFan.cs` | XML unit docs only: `Pressure` [Pa], `OverallEfficiency` [0–1], `DesignFlowRate` [l/s] |
 | `SAM.Analytical.Systems/Classes/SystemComponent/SystemSprayHumidifier.cs` | XML unit docs only: `Setpoint` [%RH], `Effectiveness` [0–1], `WaterFlowCapacity` [kg/s] |
@@ -1113,3 +1113,21 @@ against the current document:
 This note supplements, and does not replace, Section Q's delivery-status table, which
 remains a dated snapshot (2026-07-10) of the original P1–P10 delivery and is left as-is
 pending a final verification pass.
+
+---
+
+## S. Follow-up (2026-07-17): Mollier fan-process factory corrected upstream
+
+The upstream defect noted in Section R ("The upstream factory defect is left for a
+separate SAM_Mollier change") has been fixed: `SAM_Mollier` PR #7
+(`fix/fan-process-pickup-temperature`, merged into its `sow/2026-Q3`) corrected
+`Create.FanProcess(MollierPoint, double)` to add the pickup temperature to the inlet
+dry-bulb rather than assigning it as an absolute temperature, with 22 tests covering the
+factory and its underlying `Query.PickupTemperature`.
+
+This branch (`refactor/mollier-fan-factory`) removes the now-unnecessary
+`FanProcessBySpecificFanPower` workaround from `Example/TwinWheelExample.cs`; both example
+fans are built with the standard `start.FanProcess(SpecificFanPower)` call and still yield
+`Pressure = 560 Pa`, `OverallEfficiency = 0.7` (`= η · SFP · 1000 = 0.7 × 0.8 × 1000`),
+unchanged from before this cleanup. `docs/Mollier-Systems-Bridge.md`'s Limitations section,
+which described the defect and the workaround, has been updated to match.
