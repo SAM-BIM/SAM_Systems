@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+using System.Collections.Generic;
 using SAM.Core.Systems;
 
 namespace SAM.Analytical.Systems.Mollier
@@ -25,7 +26,7 @@ namespace SAM.Analytical.Systems.Mollier
         /// open on purpose. Does nothing when the boundary component is already a junction or has no open connector
         /// in the requested direction.
         /// </remarks>
-        private static void AddBoundaryJunction(SystemPlantRoom systemPlantRoom, AirSystem airSystem, ISystemComponent boundaryComponent, SAM.Core.Direction boundaryDirection, string junctionName)
+        private static void AddBoundaryJunction(SystemPlantRoom systemPlantRoom, AirSystem airSystem, ISystemComponent boundaryComponent, SAM.Core.Direction boundaryDirection, string junctionName, List<ConversionDiagnostic> diagnostics)
         {
             if (systemPlantRoom == null || airSystem == null || boundaryComponent == null || boundaryComponent is ISystemConnection || boundaryComponent is SystemAirJunction)
             {
@@ -45,12 +46,12 @@ namespace SAM.Analytical.Systems.Mollier
             if (boundaryDirection == SAM.Core.Direction.In)
             {
                 // Outside air enters the system: junction.Out -> component.In.
-                systemPlantRoom.Connect(systemAirJunction, boundaryComponent, out _, airSystem, JunctionOutIndex, boundaryIndex);
+                CheckConnect(systemPlantRoom.Connect(systemAirJunction, boundaryComponent, out _, airSystem, JunctionOutIndex, boundaryIndex), systemAirJunction, boundaryComponent, diagnostics);
             }
             else
             {
                 // Air leaves the system to exhaust: component.Out -> junction.In.
-                systemPlantRoom.Connect(boundaryComponent, systemAirJunction, out _, airSystem, boundaryIndex, JunctionInIndex);
+                CheckConnect(systemPlantRoom.Connect(boundaryComponent, systemAirJunction, out _, airSystem, boundaryIndex, JunctionInIndex), boundaryComponent, systemAirJunction, diagnostics);
             }
         }
     }

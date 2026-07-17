@@ -15,8 +15,9 @@ namespace SAM.Analytical.Systems.Mollier
         /// sharing a single heat-recovery exchanger across both air paths (e.g. a twin-wheel unit).
         /// </summary>
         /// <remarks>
-        /// The supply chain is wired onto a supply <see cref="AirSystem"/> and the extract chain onto an
-        /// extract <see cref="AirSystem"/>. A <see cref="SystemExchanger"/> exposes two air paths (connection
+        /// Both the supply chain and the extract chain are wired onto a single, shared <see cref="AirSystem"/> —
+        /// one combined <see cref="AirSystem"/> carries both sides of the AHU (supply and extract), not two
+        /// separate supply/extract systems. A <see cref="SystemExchanger"/> exposes two air paths (connection
         /// indexes 1 and 2); when both chains contain heat-recovery processes, the supply-side exchanger
         /// instances are reused on the extract side, paired in order. Because <see cref="SystemPlantRoom.Connect"/>
         /// auto-selects the first unconnected connector pair, the supply chain consumes air path 1 and the
@@ -32,8 +33,21 @@ namespace SAM.Analytical.Systems.Mollier
         /// <returns>A connected <see cref="SystemPlantRoom"/>, or null when no components could be created.</returns>
         public static SystemPlantRoom SystemPlantRoom(IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, double designSupplyAirflow = double.NaN, double designExtractAirflow = double.NaN, string name = "Plant Room")
         {
+            List<ConversionDiagnostic> _;
+            return SystemPlantRoom(supplyMollierProcesses, extractMollierProcesses, designSupplyAirflow, designExtractAirflow, name, out _);
+        }
+
+        /// <summary>
+        /// Builds a <see cref="SAM.Core.Systems.SystemPlantRoom"/> from a supply and an extract chain of Mollier processes
+        /// and collects structured diagnostics.
+        /// </summary>
+        public static SystemPlantRoom SystemPlantRoom(IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, double designSupplyAirflow, double designExtractAirflow, string name, out List<ConversionDiagnostic> diagnostics)
+        {
+            diagnostics = new List<ConversionDiagnostic>();
+
             if (supplyMollierProcesses == null && extractMollierProcesses == null)
             {
+                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error, DiagnosticCodes.NullProcessChain, "Both supply and extract process chains are null.", null));
                 return null;
             }
 
@@ -46,31 +60,32 @@ namespace SAM.Analytical.Systems.Mollier
 
             // Supply chain.
             List<SystemExchanger> supplyExchangers = new List<SystemExchanger>();
-            int supplyCount = AddChain(systemPlantRoom, supplyMollierProcesses, designSupplyAirflow, airSystem, null, supplyExchangers, out ISystemComponent supplyFirst, out ISystemComponent supplyLast);
+            int supplyCount = AddChain(systemPlantRoom, supplyMollierProcesses, designSupplyAirflow, airSystem, null, supplyExchangers, out ISystemComponent supplyFirst, out ISystemComponent supplyLast, diagnostics);
 
             // Extract chain on the same air system, reusing the supply-side exchangers (in order) so a twin-wheel is
             // one device.
-            int extractCount = AddChain(systemPlantRoom, extractMollierProcesses, designExtractAirflow, airSystem, supplyExchangers, null, out ISystemComponent extractFirst, out ISystemComponent extractLast);
+            int extractCount = AddChain(systemPlantRoom, extractMollierProcesses, designExtractAirflow, airSystem, supplyExchangers, null, out ISystemComponent extractFirst, out ISystemComponent extractLast, diagnostics);
 
             // With both air paths known, derive each shared exchanger's sensible/latent effectiveness.
-            ApplyHeatRecoveryEfficiencies(systemPlantRoom, supplyMollierProcesses, extractMollierProcesses, supplyExchangers);
+            ApplyHeatRecoveryEfficiencies(systemPlantRoom, supplyMollierProcesses, extractMollierProcesses, supplyExchangers, diagnostics);
 
             if (supplyCount == 0 && extractCount == 0)
             {
+                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error, DiagnosticCodes.ChainEmpty, "Process chain is empty; no components were created.", null));
                 return null;
             }
 
             // Cap the outside-air boundaries with explicit junctions: fresh air feeds the supply intake (the first
             // supply component's open In); exhaust air terminates the extract discharge (the last extract
             // component's open Out). The room-side boundaries (supply discharge, extract intake) are left open.
-            AddBoundaryJunction(systemPlantRoom, airSystem, supplyFirst, SAM.Core.Direction.In, "Junction Fresh Air");
-            AddBoundaryJunction(systemPlantRoom, airSystem, extractLast, SAM.Core.Direction.Out, "Junction Exhaust Air");
+            AddBoundaryJunction(systemPlantRoom, airSystem, supplyFirst, SAM.Core.Direction.In, "Junction Fresh Air", diagnostics);
+            AddBoundaryJunction(systemPlantRoom, airSystem, extractLast, SAM.Core.Direction.Out, "Junction Exhaust Air", diagnostics);
 
             // Room-side arrangement: close the loop supply discharge -> Group Junction -> Damper -> Room -> Group
             // Junction -> extract intake. The room condition is the start (room-side) point of the extract chain.
             if (supplyLast != null && extractFirst != null)
             {
-                AddRoom(systemPlantRoom, airSystem, supplyLast, extractFirst, FirstStart(extractMollierProcesses));
+                AddRoom(systemPlantRoom, airSystem, supplyLast, extractFirst, FirstStart(extractMollierProcesses), diagnostics);
             }
 
             // Promote the logical plant room to a display (drawable) plant room so the bridge output can be
@@ -78,10 +93,10 @@ namespace SAM.Analytical.Systems.Mollier
             // layout) and each connection a routed polyline. Falls back to the logical room if no symbol library
             // is available. DisplaySystem* are subclasses of their System* types, so simulation/export is
             // unaffected.
-            SystemPlantRoom displaySystemPlantRoom = ToDisplaySystemPlantRoom(systemPlantRoom);
+            SystemPlantRoom displaySystemPlantRoom = ToDisplaySystemPlantRoom(systemPlantRoom, diagnostics);
 
             // Wrap the laid-out room-side items (Room, Damper, Group Junctions) in a DisplayAirSystemGroup.
-            AddDisplayAirSystemGroup(displaySystemPlantRoom, airSystem);
+            AddDisplayAirSystemGroup(displaySystemPlantRoom, airSystem, diagnostics);
 
             return displaySystemPlantRoom;
         }
@@ -91,7 +106,7 @@ namespace SAM.Analytical.Systems.Mollier
         /// using the bundled default symbol library, so the bridge output is viewable out of the box. Returns the
         /// original logical plant room unchanged when no symbol library is available.
         /// </summary>
-        private static SystemPlantRoom ToDisplaySystemPlantRoom(SystemPlantRoom systemPlantRoom)
+        private static SystemPlantRoom ToDisplaySystemPlantRoom(SystemPlantRoom systemPlantRoom, List<ConversionDiagnostic> diagnostics)
         {
             if (systemPlantRoom == null)
             {
@@ -101,10 +116,22 @@ namespace SAM.Analytical.Systems.Mollier
             DisplaySystemManager displaySystemManager = SAM.Analytical.Systems.Query.DefaultDisplaySystemManager();
             if (displaySystemManager == null)
             {
+                if (diagnostics != null)
+                {
+                    diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Info, DiagnosticCodes.DisplaySymbolMissing, "No DisplaySystemManager available (default symbol library could not be loaded); logical plant room returned.", null));
+                }
                 return systemPlantRoom;
             }
 
-            DisplaySystemPlantRoom displaySystemPlantRoom = SAM.Analytical.Systems.Create.DisplaySystemPlantRoom(systemPlantRoom, out _, displaySystemManager);
+            DisplaySystemPlantRoom displaySystemPlantRoom = SAM.Analytical.Systems.Create.DisplaySystemPlantRoom(systemPlantRoom, out List<string> report, displaySystemManager);
+            if (diagnostics != null && report != null)
+            {
+                foreach (string line in report)
+                {
+                    diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Info, DiagnosticCodes.DisplaySymbolMissing, line, null));
+                }
+            }
+
             return displaySystemPlantRoom ?? systemPlantRoom;
         }
 
@@ -114,14 +141,31 @@ namespace SAM.Analytical.Systems.Mollier
         /// </summary>
         public static SystemEnergyCentre SystemEnergyCentre(IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, double designSupplyAirflow = double.NaN, double designExtractAirflow = double.NaN, string name = "Energy Centre")
         {
-            SystemPlantRoom systemPlantRoom = Create.SystemPlantRoom(supplyMollierProcesses, extractMollierProcesses, designSupplyAirflow, designExtractAirflow);
+            List<ConversionDiagnostic> _;
+            return SystemEnergyCentre(supplyMollierProcesses, extractMollierProcesses, designSupplyAirflow, designExtractAirflow, name, out _);
+        }
+
+        /// <summary>
+        /// Builds a <see cref="SAM.Core.Systems.SystemEnergyCentre"/> from a supply and extract Mollier process chain
+        /// and collects structured diagnostics.
+        /// </summary>
+        public static SystemEnergyCentre SystemEnergyCentre(IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, double designSupplyAirflow, double designExtractAirflow, string name, out List<ConversionDiagnostic> diagnostics)
+        {
+            SystemPlantRoom systemPlantRoom = Create.SystemPlantRoom(supplyMollierProcesses, extractMollierProcesses, designSupplyAirflow, designExtractAirflow, "Plant Room", out diagnostics);
             if (systemPlantRoom == null)
             {
                 return null;
             }
 
+            InjectLiquidSystems(systemPlantRoom, out List<SystemEnergySource> systemEnergySources, out List<ConversionDiagnostic> liquidDiagnostics);
+            if (liquidDiagnostics != null && liquidDiagnostics.Count > 0)
+            {
+                diagnostics.AddRange(liquidDiagnostics);
+            }
+
             SystemEnergyCentre systemEnergyCentre = new SystemEnergyCentre(string.IsNullOrWhiteSpace(name) ? "Energy Centre" : name);
             systemEnergyCentre.Add(systemPlantRoom);
+            AddSystemEnergySources(systemEnergyCentre, systemEnergySources);
 
             return systemEnergyCentre;
         }
@@ -132,7 +176,7 @@ namespace SAM.Analytical.Systems.Mollier
         /// instances (in order) instead of creating new ones; when <paramref name="createdExchangers"/> is supplied,
         /// newly created exchangers are appended to it.
         /// </summary>
-        private static int AddChain(SystemPlantRoom systemPlantRoom, IEnumerable<IMollierProcess> mollierProcesses, double designAirflow, AirSystem airSystem, List<SystemExchanger> reusableExchangers, List<SystemExchanger> createdExchangers, out ISystemComponent firstComponent, out ISystemComponent lastComponent)
+        private static int AddChain(SystemPlantRoom systemPlantRoom, IEnumerable<IMollierProcess> mollierProcesses, double designAirflow, AirSystem airSystem, List<SystemExchanger> reusableExchangers, List<SystemExchanger> createdExchangers, out ISystemComponent firstComponent, out ISystemComponent lastComponent, List<ConversionDiagnostic> diagnostics)
         {
             firstComponent = null;
             lastComponent = null;
@@ -161,7 +205,12 @@ namespace SAM.Analytical.Systems.Mollier
                 }
                 else
                 {
-                    current = mollierProcess.SystemComponent(designAirflow);
+                    current = mollierProcess.SystemComponent(designAirflow, out List<ConversionDiagnostic> processDiagnostics);
+                    if (diagnostics != null && processDiagnostics != null)
+                    {
+                        diagnostics.AddRange(processDiagnostics);
+                    }
+
                     if (current == null)
                     {
                         continue;
@@ -190,11 +239,24 @@ namespace SAM.Analytical.Systems.Mollier
                     int index_In = UnconnectedIndex(systemPlantRoom, current, systemType, SAM.Core.Direction.In);
                     if (index_Out != -1 && index_In != -1)
                     {
-                        systemPlantRoom.Connect(previous, current, out _, airSystem, index_Out, index_In);
+                        bool connected = systemPlantRoom.Connect(previous, current, out _, airSystem, index_Out, index_In);
+                        if (!connected && diagnostics != null)
+                        {
+                            diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Warning, DiagnosticCodes.ConnectionFailed, $"Failed to connect '{ComponentName(previous)}' to '{ComponentName(current)}' (Out {index_Out} -> In {index_In}).", mollierProcess));
+                        }
                     }
                     else
                     {
-                        systemPlantRoom.Connect(previous, current, out _, airSystem);
+                        if (diagnostics != null)
+                        {
+                            diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Warning, DiagnosticCodes.ConnectionFailed, $"Directional connector could not be resolved between '{ComponentName(previous)}' and '{ComponentName(current)}'; fell back to automatic connector selection.", mollierProcess));
+                        }
+
+                        bool connected = systemPlantRoom.Connect(previous, current, out _, airSystem);
+                        if (!connected && diagnostics != null)
+                        {
+                            diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Warning, DiagnosticCodes.ConnectionFailed, $"Automatic connector fallback failed to connect '{ComponentName(previous)}' to '{ComponentName(current)}'.", mollierProcess));
+                        }
                     }
                 }
                 else
@@ -204,7 +266,11 @@ namespace SAM.Analytical.Systems.Mollier
                     // chain never reaches that call, leaving the lone component unrelated to the air system so
                     // GetSystemComponents<T>(ISystem) (and the export/conversion paths built on it) see an empty
                     // plant room.
-                    systemPlantRoom.Connect(airSystem, current);
+                    bool related = systemPlantRoom.Connect(airSystem, current);
+                    if (!related && diagnostics != null)
+                    {
+                        diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Warning, DiagnosticCodes.ConnectionFailed, $"Failed to relate '{ComponentName(current)}' to air system '{airSystem.Name}'.", mollierProcess));
+                    }
                 }
 
                 if (firstComponent == null)
@@ -231,6 +297,29 @@ namespace SAM.Analytical.Systems.Mollier
         }
 
         /// <summary>
+        /// Best-effort display name for a component, for diagnostic messages: the object's own <c>Name</c> when
+        /// available, otherwise its runtime type name.
+        /// </summary>
+        private static string ComponentName(ISystemComponent systemComponent)
+        {
+            return (systemComponent as SystemObject)?.Name ?? systemComponent?.GetType()?.Name ?? "?";
+        }
+
+        /// <summary>
+        /// Emits a <see cref="DiagnosticCodes.ConnectionFailed"/> warning naming both endpoints when
+        /// <paramref name="connected"/> is false. No-ops when <paramref name="diagnostics"/> is null.
+        /// </summary>
+        private static void CheckConnect(bool connected, ISystemComponent from, ISystemComponent to, List<ConversionDiagnostic> diagnostics)
+        {
+            if (connected || diagnostics == null)
+            {
+                return;
+            }
+
+            diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Warning, DiagnosticCodes.ConnectionFailed, $"Failed to connect '{ComponentName(from)}' to '{ComponentName(to)}'.", null));
+        }
+
+        /// <summary>
         /// Sets sensible (and, where moisture is transferred, latent) effectiveness on each shared heat-recovery
         /// exchanger, by pairing the supply and extract heat-recovery processes in order.
         /// </summary>
@@ -246,7 +335,7 @@ namespace SAM.Analytical.Systems.Mollier
         /// leaving its connections intact.
         /// </para>
         /// </remarks>
-        private static void ApplyHeatRecoveryEfficiencies(SystemPlantRoom systemPlantRoom, IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, List<SystemExchanger> exchangers)
+        private static void ApplyHeatRecoveryEfficiencies(SystemPlantRoom systemPlantRoom, IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, List<SystemExchanger> exchangers, List<ConversionDiagnostic> diagnostics)
         {
             if (systemPlantRoom == null || exchangers == null || exchangers.Count == 0 || supplyMollierProcesses == null || extractMollierProcesses == null)
             {
@@ -255,6 +344,11 @@ namespace SAM.Analytical.Systems.Mollier
 
             List<HeatRecoveryProcess> supplyHeatRecoveries = supplyMollierProcesses.OfType<HeatRecoveryProcess>().ToList();
             List<HeatRecoveryProcess> extractHeatRecoveries = extractMollierProcesses.OfType<HeatRecoveryProcess>().ToList();
+
+            if (diagnostics != null && supplyHeatRecoveries.Count != extractHeatRecoveries.Count)
+            {
+                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Warning, DiagnosticCodes.HeatRecoveryCountMismatch, $"Supply chain has {supplyHeatRecoveries.Count} heat-recovery processes but extract chain has {extractHeatRecoveries.Count}; surplus processes get their own exchanger.", null));
+            }
 
             int count = System.Math.Min(exchangers.Count, System.Math.Min(supplyHeatRecoveries.Count, extractHeatRecoveries.Count));
             for (int i = 0; i < count; i++)
@@ -273,6 +367,11 @@ namespace SAM.Analytical.Systems.Mollier
                 }
 
                 supplyHeatRecoveries[i].HeatRecoveryEfficiencies(extractHeatRecoveries[i], out double sensibleEfficiency, out double latentEfficiency);
+
+                if (double.IsNaN(sensibleEfficiency) && double.IsNaN(latentEfficiency) && diagnostics != null)
+                {
+                    diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Warning, DiagnosticCodes.HeatRecoveryEfficiencyNotAvailable, $"Heat-recovery exchanger '{systemExchanger_Stored.Name}' has no usable sensible or latent effectiveness.", null));
+                }
 
                 bool modified = false;
                 if (!double.IsNaN(sensibleEfficiency))

@@ -9,10 +9,22 @@ namespace SAM.Analytical.Systems
 {
     public class SystemSprayHumidifier : SystemHumidifier
     {
+        /// <summary>
+        /// Off-humidifier relative humidity setpoint [%, 0-100]. Passes straight through to Tas TPD
+        /// (<c>Convert.ToTPD</c> maps it verbatim), whose spray humidifiers control downstream relative
+        /// humidity under their default flags.
+        /// </summary>
         public ModifiableValue Setpoint { get; set; }
 
+        /// <summary>
+        /// Adiabatic humidification effectiveness [0-1]: the achieved humidity-ratio rise relative to the
+        /// maximum possible (saturation) rise, clamped to [0,1].
+        /// </summary>
         public ModifiableValue Effectiveness { get; set; }
 
+        /// <summary>
+        /// Mass flow rate of water evaporated [kg/s].
+        /// </summary>
         public ISizableValue WaterFlowCapacity { get; set; }
 
         public ModifiableValue ElectricalLoad { get; set; }

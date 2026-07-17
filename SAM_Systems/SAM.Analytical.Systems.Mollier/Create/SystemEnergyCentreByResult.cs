@@ -24,8 +24,18 @@ namespace SAM.Analytical.Systems.Mollier
         /// <returns>A <see cref="SystemEnergyCentre"/>, or null.</returns>
         public static SystemEnergyCentre SystemEnergyCentre(this IEnumerable<IMollierProcess> mollierProcesses, AirHandlingUnitResult airHandlingUnitResult, string name = "Energy Centre")
         {
+            List<ConversionDiagnostic> _;
+            return SystemEnergyCentre(mollierProcesses, airHandlingUnitResult, name, out _);
+        }
+
+        /// <summary>
+        /// Builds a <see cref="SAM.Core.Systems.SystemEnergyCentre"/> from a Mollier process chain, sourcing the design airflow
+        /// from a computed <see cref="AirHandlingUnitResult"/>, and collects structured diagnostics.
+        /// </summary>
+        public static SystemEnergyCentre SystemEnergyCentre(this IEnumerable<IMollierProcess> mollierProcesses, AirHandlingUnitResult airHandlingUnitResult, string name, out List<ConversionDiagnostic> diagnostics)
+        {
             double designAirflow = DesignAirflow(airHandlingUnitResult);
-            return Create.SystemEnergyCentre(mollierProcesses, designAirflow, name);
+            return Create.SystemEnergyCentre(mollierProcesses, designAirflow, name, out diagnostics);
         }
 
         /// <summary>
@@ -34,8 +44,18 @@ namespace SAM.Analytical.Systems.Mollier
         /// </summary>
         public static SystemEnergyCentre SystemEnergyCentre(this MollierGroup mollierGroup, AirHandlingUnitResult airHandlingUnitResult, string name = null)
         {
+            List<ConversionDiagnostic> _;
+            return SystemEnergyCentre(mollierGroup, airHandlingUnitResult, name, out _);
+        }
+
+        /// <summary>
+        /// Builds a <see cref="SAM.Core.Systems.SystemEnergyCentre"/> from a <see cref="MollierGroup"/>, sourcing the design airflow
+        /// from a computed <see cref="AirHandlingUnitResult"/>, and collects structured diagnostics.
+        /// </summary>
+        public static SystemEnergyCentre SystemEnergyCentre(this MollierGroup mollierGroup, AirHandlingUnitResult airHandlingUnitResult, string name, out List<ConversionDiagnostic> diagnostics)
+        {
             double designAirflow = DesignAirflow(airHandlingUnitResult);
-            return Create.SystemEnergyCentre(mollierGroup, designAirflow, name);
+            return Create.SystemEnergyCentre(mollierGroup, designAirflow, name, out diagnostics);
         }
 
         private static double DesignAirflow(AirHandlingUnitResult airHandlingUnitResult)

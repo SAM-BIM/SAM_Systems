@@ -24,8 +24,27 @@ namespace SAM.Analytical.Systems.Mollier
         /// <returns>A connected <see cref="SystemPlantRoom"/>, or null when no components could be created.</returns>
         public static SystemPlantRoom SystemPlantRoom(this IEnumerable<IMollierProcess> mollierProcesses, double designAirflow = double.NaN, string name = "Plant Room", string airSystemName = "Air System")
         {
+            List<ConversionDiagnostic> _;
+            return SystemPlantRoom(mollierProcesses, designAirflow, name, airSystemName, out _);
+        }
+
+        /// <summary>
+        /// Builds a connected air-handling <see cref="SAM.Core.Systems.SystemPlantRoom"/> from an ordered chain of Mollier processes
+        /// and collects structured diagnostics.
+        /// </summary>
+        /// <param name="mollierProcesses">Ordered psychrometric process chain.</param>
+        /// <param name="designAirflow">Design volumetric airflow [m3/s].</param>
+        /// <param name="name">Plant room name.</param>
+        /// <param name="airSystemName">Name of the air system the components are wired onto.</param>
+        /// <param name="diagnostics">Receives any diagnostics generated during conversion.</param>
+        /// <returns>A connected <see cref="SAM.Core.Systems.SystemPlantRoom"/>, or null when no components could be created.</returns>
+        public static SystemPlantRoom SystemPlantRoom(this IEnumerable<IMollierProcess> mollierProcesses, double designAirflow, string name, string airSystemName, out List<ConversionDiagnostic> diagnostics)
+        {
+            diagnostics = new List<ConversionDiagnostic>();
+
             if (mollierProcesses == null)
             {
+                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error, DiagnosticCodes.NullProcessChain, "Process chain is null.", null));
                 return null;
             }
 
@@ -35,19 +54,20 @@ namespace SAM.Analytical.Systems.Mollier
             systemPlantRoom.Add(airSystem);
 
             // Single supply chain: no exchanger reuse, no exchanger collection needed.
-            int count = AddChain(systemPlantRoom, mollierProcesses, designAirflow, airSystem, null, null, out ISystemComponent firstComponent, out ISystemComponent _);
+            int count = AddChain(systemPlantRoom, mollierProcesses, designAirflow, airSystem, null, null, out ISystemComponent firstComponent, out ISystemComponent _, diagnostics);
 
             if (count == 0)
             {
+                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error, DiagnosticCodes.ChainEmpty, "Process chain is empty; no components were created.", null));
                 return null;
             }
 
             // Cap the supply intake with an explicit fresh-air junction so the outside-air boundary is not left
             // dangling. A supply-only chain has no extract discharge, so no exhaust junction is added.
-            AddBoundaryJunction(systemPlantRoom, airSystem, firstComponent, SAM.Core.Direction.In, "Junction Fresh Air");
+            AddBoundaryJunction(systemPlantRoom, airSystem, firstComponent, SAM.Core.Direction.In, "Junction Fresh Air", diagnostics);
 
             // Promote to a drawable display plant room (falls back to logical when no symbol library is present).
-            return ToDisplaySystemPlantRoom(systemPlantRoom);
+            return ToDisplaySystemPlantRoom(systemPlantRoom, diagnostics);
         }
 
         /// <summary>
@@ -59,20 +79,39 @@ namespace SAM.Analytical.Systems.Mollier
         /// <returns>A connected <see cref="SystemPlantRoom"/>, or null.</returns>
         public static SystemPlantRoom SystemPlantRoom(this MollierGroup mollierGroup, double designAirflow = double.NaN, string name = null)
         {
+            List<ConversionDiagnostic> _;
+            return SystemPlantRoom(mollierGroup, designAirflow, name, out _);
+        }
+
+        /// <summary>
+        /// Builds a connected air-handling <see cref="SAM.Core.Systems.SystemPlantRoom"/> from a <see cref="MollierGroup"/>
+        /// and collects structured diagnostics.
+        /// </summary>
+        /// <param name="mollierGroup">Group holding the ordered psychrometric process chain.</param>
+        /// <param name="designAirflow">Design volumetric airflow [m3/s].</param>
+        /// <param name="name">Plant room name. Defaults to the group name when available.</param>
+        /// <param name="diagnostics">Receives any diagnostics generated during conversion.</param>
+        /// <returns>A connected <see cref="SAM.Core.Systems.SystemPlantRoom"/>, or null.</returns>
+        public static SystemPlantRoom SystemPlantRoom(this MollierGroup mollierGroup, double designAirflow, string name, out List<ConversionDiagnostic> diagnostics)
+        {
+            diagnostics = new List<ConversionDiagnostic>();
+
             if (mollierGroup == null)
             {
+                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error, DiagnosticCodes.NullProcessChain, "Mollier group is null.", null));
                 return null;
             }
 
             List<IMollierProcess> mollierProcesses = mollierGroup.GetObjects<IMollierProcess>();
             if (mollierProcesses == null || mollierProcesses.Count == 0)
             {
+                diagnostics.Add(new ConversionDiagnostic(DiagnosticSeverity.Error, DiagnosticCodes.NoProcessesInChain, "Mollier group contains no processes.", null));
                 return null;
             }
 
             string plantRoomName = name ?? (string.IsNullOrWhiteSpace(mollierGroup.Name) ? "Plant Room" : mollierGroup.Name);
 
-            return Create.SystemPlantRoom(mollierProcesses, designAirflow, plantRoomName);
+            return Create.SystemPlantRoom(mollierProcesses, designAirflow, plantRoomName, "Air System", out diagnostics);
         }
     }
 }
