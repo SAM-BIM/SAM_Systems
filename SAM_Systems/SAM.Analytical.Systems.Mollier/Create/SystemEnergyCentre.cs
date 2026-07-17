@@ -27,14 +27,14 @@ namespace SAM.Analytical.Systems.Mollier
         }
 
         /// <summary>
-        /// Builds a simulation-ready <see cref="SystemEnergyCentre"/> from an ordered chain of Mollier processes
+        /// Builds a simulation-ready <see cref="SAM.Core.Systems.SystemEnergyCentre"/> from an ordered chain of Mollier processes
         /// and collects structured diagnostics.
         /// </summary>
         /// <param name="mollierProcesses">Ordered psychrometric process chain.</param>
         /// <param name="designAirflow">Design volumetric airflow [m3/s].</param>
         /// <param name="name">Energy centre name.</param>
         /// <param name="diagnostics">Receives any diagnostics generated during conversion.</param>
-        /// <returns>A <see cref="SystemEnergyCentre"/>, or null when no plant room could be built.</returns>
+        /// <returns>A <see cref="SAM.Core.Systems.SystemEnergyCentre"/>, or null when no plant room could be built.</returns>
         public static SystemEnergyCentre SystemEnergyCentre(this IEnumerable<IMollierProcess> mollierProcesses, double designAirflow, string name, out List<ConversionDiagnostic> diagnostics)
         {
             SystemPlantRoom systemPlantRoom = Create.SystemPlantRoom(mollierProcesses, designAirflow, "Plant Room", "Air System", out diagnostics);
@@ -70,14 +70,14 @@ namespace SAM.Analytical.Systems.Mollier
         }
 
         /// <summary>
-        /// Builds a simulation-ready <see cref="SystemEnergyCentre"/> from a <see cref="MollierGroup"/>
+        /// Builds a simulation-ready <see cref="SAM.Core.Systems.SystemEnergyCentre"/> from a <see cref="MollierGroup"/>
         /// and collects structured diagnostics.
         /// </summary>
         /// <param name="mollierGroup">Group holding the ordered psychrometric process chain.</param>
         /// <param name="designAirflow">Design volumetric airflow [m3/s].</param>
         /// <param name="name">Energy centre name. Defaults to the group name when available.</param>
         /// <param name="diagnostics">Receives any diagnostics generated during conversion.</param>
-        /// <returns>A <see cref="SystemEnergyCentre"/>, or null.</returns>
+        /// <returns>A <see cref="SAM.Core.Systems.SystemEnergyCentre"/>, or null.</returns>
         public static SystemEnergyCentre SystemEnergyCentre(this MollierGroup mollierGroup, double designAirflow, string name, out List<ConversionDiagnostic> diagnostics)
         {
             SystemPlantRoom systemPlantRoom = Create.SystemPlantRoom(mollierGroup, designAirflow, null, out diagnostics);

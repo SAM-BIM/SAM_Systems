@@ -29,7 +29,7 @@ namespace SAM.Analytical.Systems.Mollier
         }
 
         /// <summary>
-        /// Builds a connected air-handling <see cref="SystemPlantRoom"/> from an ordered chain of Mollier processes
+        /// Builds a connected air-handling <see cref="SAM.Core.Systems.SystemPlantRoom"/> from an ordered chain of Mollier processes
         /// and collects structured diagnostics.
         /// </summary>
         /// <param name="mollierProcesses">Ordered psychrometric process chain.</param>
@@ -37,7 +37,7 @@ namespace SAM.Analytical.Systems.Mollier
         /// <param name="name">Plant room name.</param>
         /// <param name="airSystemName">Name of the air system the components are wired onto.</param>
         /// <param name="diagnostics">Receives any diagnostics generated during conversion.</param>
-        /// <returns>A connected <see cref="SystemPlantRoom"/>, or null when no components could be created.</returns>
+        /// <returns>A connected <see cref="SAM.Core.Systems.SystemPlantRoom"/>, or null when no components could be created.</returns>
         public static SystemPlantRoom SystemPlantRoom(this IEnumerable<IMollierProcess> mollierProcesses, double designAirflow, string name, string airSystemName, out List<ConversionDiagnostic> diagnostics)
         {
             diagnostics = new List<ConversionDiagnostic>();
@@ -84,14 +84,14 @@ namespace SAM.Analytical.Systems.Mollier
         }
 
         /// <summary>
-        /// Builds a connected air-handling <see cref="SystemPlantRoom"/> from a <see cref="MollierGroup"/>
+        /// Builds a connected air-handling <see cref="SAM.Core.Systems.SystemPlantRoom"/> from a <see cref="MollierGroup"/>
         /// and collects structured diagnostics.
         /// </summary>
         /// <param name="mollierGroup">Group holding the ordered psychrometric process chain.</param>
         /// <param name="designAirflow">Design volumetric airflow [m3/s].</param>
         /// <param name="name">Plant room name. Defaults to the group name when available.</param>
         /// <param name="diagnostics">Receives any diagnostics generated during conversion.</param>
-        /// <returns>A connected <see cref="SystemPlantRoom"/>, or null.</returns>
+        /// <returns>A connected <see cref="SAM.Core.Systems.SystemPlantRoom"/>, or null.</returns>
         public static SystemPlantRoom SystemPlantRoom(this MollierGroup mollierGroup, double designAirflow, string name, out List<ConversionDiagnostic> diagnostics)
         {
             diagnostics = new List<ConversionDiagnostic>();

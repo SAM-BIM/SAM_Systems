@@ -29,7 +29,7 @@ namespace SAM.Analytical.Systems.Mollier
         }
 
         /// <summary>
-        /// Builds a <see cref="SystemEnergyCentre"/> from a Mollier process chain, sourcing the design airflow
+        /// Builds a <see cref="SAM.Core.Systems.SystemEnergyCentre"/> from a Mollier process chain, sourcing the design airflow
         /// from a computed <see cref="AirHandlingUnitResult"/>, and collects structured diagnostics.
         /// </summary>
         public static SystemEnergyCentre SystemEnergyCentre(this IEnumerable<IMollierProcess> mollierProcesses, AirHandlingUnitResult airHandlingUnitResult, string name, out List<ConversionDiagnostic> diagnostics)
@@ -49,7 +49,7 @@ namespace SAM.Analytical.Systems.Mollier
         }
 
         /// <summary>
-        /// Builds a <see cref="SystemEnergyCentre"/> from a <see cref="MollierGroup"/>, sourcing the design airflow
+        /// Builds a <see cref="SAM.Core.Systems.SystemEnergyCentre"/> from a <see cref="MollierGroup"/>, sourcing the design airflow
         /// from a computed <see cref="AirHandlingUnitResult"/>, and collects structured diagnostics.
         /// </summary>
         public static SystemEnergyCentre SystemEnergyCentre(this MollierGroup mollierGroup, AirHandlingUnitResult airHandlingUnitResult, string name, out List<ConversionDiagnostic> diagnostics)

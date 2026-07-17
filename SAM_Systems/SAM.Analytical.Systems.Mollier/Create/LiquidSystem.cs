@@ -21,7 +21,7 @@ namespace SAM.Analytical.Systems.Mollier
         /// <summary>
         /// Injects a closed heating and/or cooling liquid loop for every heating/cooling coil in the plant room,
         /// and returns the default <see cref="SystemEnergySource"/>s (gas for the boiler, grid electricity for
-        /// the chiller) that the caller must add to the owning <see cref="SystemEnergyCentre"/> - energy sources
+        /// the chiller) that the caller must add to the owning <see cref="SAM.Core.Systems.SystemEnergyCentre"/> - energy sources
         /// live at the energy-centre level, not in the plant room.
         /// </summary>
         internal static void InjectLiquidSystems(SystemPlantRoom systemPlantRoom, out List<SystemEnergySource> systemEnergySources, out List<ConversionDiagnostic> diagnostics)

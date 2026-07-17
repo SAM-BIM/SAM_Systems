@@ -36,7 +36,7 @@ namespace SAM.Analytical.Systems.Mollier
         }
 
         /// <summary>
-        /// Builds a <see cref="SystemEnergyCentre"/> by adding the air systems derived from the supply and extract
+        /// Builds a <see cref="SAM.Core.Systems.SystemEnergyCentre"/> by adding the air systems derived from the supply and extract
         /// Mollier chains into an existing plant-room <paramref name="template"/>, and collects structured
         /// diagnostics. See
         /// <see cref="SystemEnergyCentre(IEnumerable{IMollierProcess}, IEnumerable{IMollierProcess}, double, double, string, SystemEnergyCentre)"/>.

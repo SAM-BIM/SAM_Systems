@@ -38,7 +38,7 @@ namespace SAM.Analytical.Systems.Mollier
         }
 
         /// <summary>
-        /// Builds a <see cref="SystemPlantRoom"/> from a supply and an extract chain of Mollier processes
+        /// Builds a <see cref="SAM.Core.Systems.SystemPlantRoom"/> from a supply and an extract chain of Mollier processes
         /// and collects structured diagnostics.
         /// </summary>
         public static SystemPlantRoom SystemPlantRoom(IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, double designSupplyAirflow, double designExtractAirflow, string name, out List<ConversionDiagnostic> diagnostics)
@@ -146,7 +146,7 @@ namespace SAM.Analytical.Systems.Mollier
         }
 
         /// <summary>
-        /// Builds a <see cref="SystemEnergyCentre"/> from a supply and extract Mollier process chain
+        /// Builds a <see cref="SAM.Core.Systems.SystemEnergyCentre"/> from a supply and extract Mollier process chain
         /// and collects structured diagnostics.
         /// </summary>
         public static SystemEnergyCentre SystemEnergyCentre(IEnumerable<IMollierProcess> supplyMollierProcesses, IEnumerable<IMollierProcess> extractMollierProcesses, double designSupplyAirflow, double designExtractAirflow, string name, out List<ConversionDiagnostic> diagnostics)
