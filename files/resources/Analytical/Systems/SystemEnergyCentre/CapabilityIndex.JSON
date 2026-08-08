@@ -1,0 +1,138 @@
+{
+  "Schema": "SystemEnergyCentreCapability:v1",
+
+  "Note": [
+    "What each shipped SystemEnergyCentre template can do, so that choosing one never costs the one to",
+    "two megabytes the template itself weighs. This file is read at runtime; the templates are not.",
+    "",
+    "Entries are keyed on the EXISTING SystemTemplate identity. No new system or equipment identity is",
+    "introduced here - in particular there is no MVHR, because MVRE already is SAM's heat-recovery",
+    "ventilation and a second name would split one concept in two.",
+    "",
+    "Only the ventilation identity is stated. These ten files are ventilation templates; heating, cooling,",
+    "plant room and controls are chosen elsewhere and do not select among them.",
+    "",
+    "Rank is the preference order among systems that all meet a requirement - LOWER IS PREFERRED. It is a",
+    "policy about this library, which is why it lives here and not in SAM.Analytical. The order below is",
+    "simplest-provision-first and is PROPOSED, not confirmed: Michal to review.",
+    "",
+    "EvidenceFromTemplate names the capabilities whose value was established by reading the template file",
+    "itself, and which SystemEnergyCentreCapabilityTests re-verifies against the shipped resources. Every",
+    "other value is DECLARED from the system type's meaning in SAM_SystemTypeLibrary.JSON and is an",
+    "engineering statement to be confirmed, not a measurement.",
+    "",
+    "SummerBypass is false everywhere, and that is a finding rather than an omission: no shipped template",
+    "models a summer bypass. Iteration 2 needs one, and until a template provides it a scenario requiring",
+    "bypass will be REFUSED - loudly, which is the point. Declaring it true would credit a dwelling with",
+    "mitigation the design does not have."
+  ],
+
+  "Templates": [
+    {
+      "SystemTemplate": { "_type": "SAM.Analytical.SystemTemplate,SAM.Analytical", "Ventilation": "NV" },
+      "Resource": "NV.json",
+      "Description": "Natural Ventilation",
+      "Rank": 10,
+      "ContinuousVentilation": true,
+      "Boost": false,
+      "SummerBypass": false,
+      "HeatRecovery": false,
+      "EvidenceFromTemplate": [ "HeatRecovery", "SummerBypass" ]
+    },
+    {
+      "SystemTemplate": { "_type": "SAM.Analytical.SystemTemplate,SAM.Analytical", "Ventilation": "EOL" },
+      "Resource": "EOL.json",
+      "Description": "Local Extract Only",
+      "Rank": 20,
+      "ContinuousVentilation": true,
+      "Boost": true,
+      "SummerBypass": false,
+      "HeatRecovery": false,
+      "EvidenceFromTemplate": [ "HeatRecovery", "SummerBypass" ]
+    },
+    {
+      "SystemTemplate": { "_type": "SAM.Analytical.SystemTemplate,SAM.Analytical", "Ventilation": "EOC" },
+      "Resource": "EOC.json",
+      "Description": "Central Extract Only",
+      "Rank": 30,
+      "ContinuousVentilation": true,
+      "Boost": true,
+      "SummerBypass": false,
+      "HeatRecovery": false,
+      "EvidenceFromTemplate": [ "HeatRecovery", "SummerBypass" ]
+    },
+    {
+      "SystemTemplate": { "_type": "SAM.Analytical.SystemTemplate,SAM.Analytical", "Ventilation": "MV" },
+      "Resource": "MV.json",
+      "Description": "Supply And Extract Mechanical Ventilation, no heat recovery",
+      "Rank": 40,
+      "ContinuousVentilation": true,
+      "Boost": true,
+      "SummerBypass": false,
+      "HeatRecovery": false,
+      "EvidenceFromTemplate": [ "HeatRecovery", "SummerBypass" ]
+    },
+    {
+      "SystemTemplate": { "_type": "SAM.Analytical.SystemTemplate,SAM.Analytical", "Ventilation": "MVRE" },
+      "Resource": "MVRE.json",
+      "Description": "Mechanical Ventilation with heat recovery - SAM's MVHR. Exchanger 1, sensible 0.7, latent 0, no recirculation component.",
+      "Rank": 50,
+      "ContinuousVentilation": true,
+      "Boost": true,
+      "SummerBypass": false,
+      "HeatRecovery": true,
+      "EvidenceFromTemplate": [ "HeatRecovery", "SummerBypass" ]
+    },
+    {
+      "SystemTemplate": { "_type": "SAM.Analytical.SystemTemplate,SAM.Analytical", "Ventilation": "CAV" },
+      "Resource": "CAV.json",
+      "Description": "Constant Air Volume. Boost false because the type is constant volume.",
+      "Rank": 60,
+      "ContinuousVentilation": true,
+      "Boost": false,
+      "SummerBypass": false,
+      "HeatRecovery": true,
+      "EvidenceFromTemplate": [ "HeatRecovery", "SummerBypass" ]
+    },
+    {
+      "SystemTemplate": { "_type": "SAM.Analytical.SystemTemplate,SAM.Analytical", "Ventilation": "VAV" },
+      "Resource": "VAV.json",
+      "Description": "Variable Air Volume",
+      "Rank": 70,
+      "ContinuousVentilation": true,
+      "Boost": true,
+      "SummerBypass": false,
+      "HeatRecovery": true,
+      "EvidenceFromTemplate": [ "HeatRecovery", "SummerBypass" ]
+    },
+    {
+      "SystemTemplate": { "_type": "SAM.Analytical.SystemTemplate,SAM.Analytical", "Ventilation": "DISP" },
+      "Resource": "DISP.json",
+      "Description": "Displacement Ventilation. Boost false because raising the supply rate breaks the displacement regime.",
+      "Rank": 80,
+      "ContinuousVentilation": true,
+      "Boost": false,
+      "SummerBypass": false,
+      "HeatRecovery": true,
+      "EvidenceFromTemplate": [ "HeatRecovery", "SummerBypass" ]
+    },
+    {
+      "SystemTemplate": { "_type": "SAM.Analytical.SystemTemplate,SAM.Analytical", "Ventilation": "UV" },
+      "Resource": "UV.json",
+      "Description": "Unconditioned. Provides nothing, so it is never suitable - it is listed so the library is complete rather than silently short of a file.",
+      "Rank": 90,
+      "ContinuousVentilation": false,
+      "Boost": false,
+      "SummerBypass": false,
+      "HeatRecovery": false,
+      "EvidenceFromTemplate": [ "HeatRecovery", "SummerBypass" ]
+    }
+  ],
+
+  "NonVentilationResources": [
+    {
+      "Resource": "Plantroom-Only.json",
+      "Description": "A plant room with no ventilation system type. Not a ventilation template, so it is never a candidate - recorded here so that every shipped resource is accounted for and none is silently missing an entry."
+    }
+  ]
+}
