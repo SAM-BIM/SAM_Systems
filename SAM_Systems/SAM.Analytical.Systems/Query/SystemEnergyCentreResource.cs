@@ -45,14 +45,22 @@ namespace SAM.Analytical.Systems
                     continue;
                 }
 
-                if (!string.Equals(new SystemTemplate(jsonObject_SystemTemplate).Ventilation, systemTemplate.Ventilation, StringComparison.Ordinal))
+                //Normalised through the property setter, as the descriptors are: SystemTemplate's JSON path
+                //assigns its fields raw and its setters strip spaces, so an index entry reading "M V" would
+                //otherwise never match a caller's constructor-built "MV".
+                string ventilation = jsonObject_SystemTemplate["Ventilation"] is JsonValue jsonValue_Ventilation && jsonValue_Ventilation.TryGetValue(out string text_Ventilation) ? text_Ventilation : null;
+
+                if (string.IsNullOrWhiteSpace(ventilation) || !string.Equals(new SystemTemplate(ventilation, null, null, null, null, null).Ventilation, systemTemplate.Ventilation, StringComparison.Ordinal))
                 {
                     continue;
                 }
 
                 string resource = jsonObject_Template["Resource"] is JsonValue jsonValue && jsonValue.TryGetValue(out string text) ? text : null;
 
-                if (string.IsNullOrWhiteSpace(resource))
+                //A resource is a file name in the resources directory and nothing else. Anything with a
+                //separator or a parent reference in it would let an index reach outside the directory it
+                //ships in, so it is refused rather than combined.
+                if (string.IsNullOrWhiteSpace(resource) || resource.IndexOfAny(new[] { '/', '\\', ':' }) >= 0 || resource.Contains(".."))
                 {
                     return null;
                 }

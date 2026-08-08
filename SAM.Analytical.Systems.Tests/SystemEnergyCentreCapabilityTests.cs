@@ -146,7 +146,7 @@ namespace SAM.Analytical.Systems.Tests
                 string json = File.ReadAllText(Path.Combine(Directory_Resources(), resource));
 
                 bool claimed = (systemCapabilityDescriptor.Capabilities & SystemCapability.HeatRecovery) == SystemCapability.HeatRecovery;
-                bool present = SensibleEfficiencies(json).Count > 0;
+                bool present = SensibleEfficiencies(json).Exists(x => x > 0);
 
                 Assert.True(claimed == present, string.Format("'{0}' claims HeatRecovery={1} but '{2}' {3} an exchanger.", systemCapabilityDescriptor.SystemTemplate.Ventilation, claimed, resource, present ? "has" : "has no"));
             }
@@ -154,8 +154,11 @@ namespace SAM.Analytical.Systems.Tests
             //The MVRE fact itself, since every Part O decision about heat recovery rests on it.
             string json_MVRE = File.ReadAllText(Path.Combine(Directory_Resources(), "MVRE.json"));
 
-            Assert.Equal(["0.7"], SensibleEfficiencies(json_MVRE));
-            Assert.Equal(["0"], LatentEfficiencies(json_MVRE));
+            Assert.Equal([0.7], SensibleEfficiencies(json_MVRE));
+            Assert.Equal([0.0], LatentEfficiencies(json_MVRE));
+
+            //"Exchanger 1" and nothing else - the index Description claims exactly one.
+            Assert.Single(ExchangerNames(json_MVRE));
             Assert.DoesNotContain("ecirculat", json_MVRE);
 
             //And MV is the same system without the exchanger - which is what makes the pair mean exactly
@@ -163,6 +166,7 @@ namespace SAM.Analytical.Systems.Tests
             string json_MV = File.ReadAllText(Path.Combine(Directory_Resources(), "MV.json"));
 
             Assert.Empty(SensibleEfficiencies(json_MV));
+            Assert.Empty(ExchangerNames(json_MV));
         }
 
         /// <summary>
@@ -182,6 +186,22 @@ namespace SAM.Analytical.Systems.Tests
             foreach (SystemCapabilityDescriptor systemCapabilityDescriptor in systemCapabilityDescriptors)
             {
                 Assert.Equal(SystemCapability.None, systemCapabilityDescriptor.Capabilities & SystemCapability.SummerBypass);
+            }
+
+            //THE EVIDENCE. The index claims SummerBypass was established from the templates, so establish it:
+            //no template may hold a bypass token at all, other than BypassFactor - which is a cooling-coil
+            //parameter and would false-positive a naive search. An earlier revision of this test asserted
+            //only what the index said about itself, which proved nothing.
+            foreach (string path in Directory.GetFiles(Directory_Resources(), "*.json"))
+            {
+                if (string.Equals(Path.GetFileName(path), Query.CapabilityIndexFileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string json = File.ReadAllText(path).Replace("BypassFactor", string.Empty);
+
+                Assert.DoesNotContain("ypass", json, StringComparison.OrdinalIgnoreCase);
             }
 
             //So a Part O scenario asking for bypass gets a refusal rather than a system that cannot do it.
@@ -228,34 +248,63 @@ namespace SAM.Analytical.Systems.Tests
         // ---------------------------------------------------------------------------------------------
 
         /// <summary>
-        /// <b>Reading capabilities and choosing a system touch the index and nothing else.</b> Proved by
-        /// timing it against the cost of opening one template: the whole selection is far quicker than a
-        /// single 1.2 MB file, which it could not be if it were reading any of them. A generous factor,
-        /// because this asserts an order of magnitude, not a benchmark.
+        /// <b>Reading capabilities and choosing a system touch the index and nothing else - proved
+        /// structurally, not by a stopwatch.</b> The index is copied ALONE into an empty directory, with no
+        /// template beside it, and the whole selection still produces the same answer. Any code path that
+        /// opened a template would fail outright.
+        /// <para>
+        /// An earlier revision timed the selection against the cost of reading one template. That was not
+        /// vacuous - opening ten of them would have blown the bar - but it was machine-dependent, a single
+        /// long pause on a loaded runner could flip it, and it only covered the one requirement it happened
+        /// to exercise. This is deterministic.
+        /// </para>
         /// </summary>
         [Fact]
         public void ChoosingASystem_DoesNotOpenATemplate()
         {
-            //Warm the file system so the comparison is not measuring a cold cache.
-            File.ReadAllText(Path.Combine(Directory_Resources(), "MV.json"));
-            Query.SystemCapabilityDescriptors(Directory_Resources());
+            string directory = Path.Combine(Path.GetTempPath(), "SAM_CapabilityIndexOnly_" + Guid.NewGuid().ToString("N"));
 
-            System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
-
-            for (int i = 0; i < 5; i++)
+            try
             {
-                Query.SystemCapabilityDescriptors(Directory_Resources()).SelectPreferredCapableSystem(new SystemCapabilityRequirement(SystemCapability.ContinuousVentilation | SystemCapability.Boost));
+                Directory.CreateDirectory(directory);
+
+                File.Copy(Path.Combine(Directory_Resources(), Query.CapabilityIndexFileName), Path.Combine(directory, Query.CapabilityIndexFileName));
+
+                //Nothing else is there. Confirmed rather than assumed, so this cannot pass by accident.
+                Assert.Single(Directory.GetFiles(directory));
+
+                List<SystemCapabilityDescriptor> systemCapabilityDescriptors = Query.SystemCapabilityDescriptors(directory);
+
+                Assert.NotNull(systemCapabilityDescriptors);
+                Assert.Equal(Query.SystemCapabilityDescriptors(Directory_Resources()).Count, systemCapabilityDescriptors.Count);
+
+                //Every requirement Part F can produce, answered identically without a template in sight.
+                foreach (SystemCapability systemCapability in new[]
+                {
+                    SystemCapability.ContinuousVentilation,
+                    SystemCapability.ContinuousVentilation | SystemCapability.Boost,
+                    SystemCapability.ContinuousVentilation | SystemCapability.MechanicalSupply,
+                    SystemCapability.ContinuousVentilation | SystemCapability.MechanicalSupply | SystemCapability.Boost
+                })
+                {
+                    SystemCapabilityRequirement systemCapabilityRequirement = new(systemCapability);
+
+                    Assert.Equal(
+                        Query.SystemCapabilityDescriptors(Directory_Resources()).SelectPreferredCapableSystem(systemCapabilityRequirement).SystemTemplate?.Ventilation,
+                        systemCapabilityDescriptors.SelectPreferredCapableSystem(systemCapabilityRequirement).SystemTemplate?.Ventilation);
+                }
+
+                //And resolution DOES need the template - the one thing that must fail without it, so this
+                //test cannot be passing merely because nothing reads anything.
+                Assert.Null(new SystemTemplate("MVRE", null, null, null, null, null).SystemEnergyCentre(directory));
             }
-
-            long elapsed_Selection = stopwatch.ElapsedMilliseconds;
-
-            stopwatch.Restart();
-
-            File.ReadAllText(Path.Combine(Directory_Resources(), "MVRE.json"));
-
-            long elapsed_OneTemplate = stopwatch.ElapsedMilliseconds;
-
-            Assert.True(elapsed_Selection <= System.Math.Max(elapsed_OneTemplate, 5) * 3, string.Format("Five selections took {0} ms against {1} ms to read one template - selection is reading template files.", elapsed_Selection, elapsed_OneTemplate));
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
         }
 
         /// <summary>
@@ -294,8 +343,184 @@ namespace SAM.Analytical.Systems.Tests
         }
 
         // ---------------------------------------------------------------------------------------------
+        // A malformed index refuses, it does not answer
+        // ---------------------------------------------------------------------------------------------
+
+        /// <summary>
+        /// <b>A broken index yields nothing, not a confident wrong answer.</b> The case that made this
+        /// necessary: a review changed VAV's <c>"Rank"</c> to <c>"rank"</c> - one letter - and every dwelling
+        /// requirement then selected a commercial variable-air-volume unit in place of a dwelling extract
+        /// fan, silently, because a missing rank defaulted to 0 and 0 sorts first. A half-edited index must
+        /// disable selection loudly rather than reorder it quietly.
+        /// </summary>
+        [Theory]
+        [InlineData("\"Rank\": 20,", "\"rank\": 20,")]
+        [InlineData("\"Rank\": 20,", "")]
+        [InlineData("\"Rank\": 20,", "\"Rank\": \"20\",")]
+        [InlineData("\"Ventilation\": \"EOL\"", "\"Ventilation\": 5")]
+        [InlineData("\"Templates\": [", "\"Templates\": 5, \"Unused\": [")]
+        public void MalformedIndex_ProducesNoDescriptors(string find, string replace)
+        {
+            string json = Json_Index();
+
+            Assert.Contains(find, json);
+
+            string directory = Directory_Temp(json.Replace(find, replace));
+
+            try
+            {
+                Assert.Null(Query.SystemCapabilityDescriptors(directory));
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        /// <summary>
+        /// A <c>Resource</c> is a file name in the resources directory and nothing else. An index that
+        /// reached outside the directory it ships in would load whatever it was pointed at.
+        /// </summary>
+        [Theory]
+        [InlineData("..\\\\..\\\\elsewhere.json")]
+        [InlineData("sub/MV.json")]
+        [InlineData("C:\\\\MV.json")]
+        public void ResourceOutsideTheDirectory_IsRefused(string resource)
+        {
+            string directory = Directory_Temp(Json_Index().Replace("\"Resource\": \"MV.json\",", "\"Resource\": \"" + resource + "\","));
+
+            try
+            {
+                Assert.Null(Template("MV").SystemEnergyCentreResource(directory));
+                Assert.Null(Template("MV").SystemEnergyCentre(directory));
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        /// <summary>
+        /// An index entry written with a stray space still matches a caller who built the same identity
+        /// through the constructor. <c>SystemTemplate</c>'s property setters strip spaces but its JSON path
+        /// assigns its fields raw, so <c>"M V"</c> and <c>"MV"</c> would otherwise be two systems - the
+        /// descriptor would be offered and then resolve to nothing.
+        /// </summary>
+        [Fact]
+        public void IndexEntryWithAStraySpace_StillMatches()
+        {
+            string directory = Directory_Temp(Json_Index().Replace("\"Ventilation\": \"MV\"", "\"Ventilation\": \"M V\""));
+
+            try
+            {
+                Assert.Contains("MV", Query.SystemCapabilityDescriptors(directory).ConvertAll(x => x.SystemTemplate.Ventilation));
+                Assert.Equal("MV.json", Template("MV").SystemEnergyCentreResource(directory));
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        // ---------------------------------------------------------------------------------------------
+        // What the shipped library can actually answer
+        // ---------------------------------------------------------------------------------------------
+
+        /// <summary>
+        /// <b>Which systems the shipped library can ever select, recorded so a change is noticed.</b> A
+        /// review pointed out that nine catalogued templates were expressing a two-valued function; with
+        /// mechanical supply in the vocabulary it is four, and the entries that remain unreachable are so
+        /// for stated reasons rather than by accident.
+        /// <para>
+        /// A characterisation test. It endorses nothing - if a rank or a capability changes it will fail, and
+        /// the right response is to read it and decide, not to update the expectation blindly.
+        /// </para>
+        /// </summary>
+        [Fact]
+        public void ShippedLibrary_AnswersEveryPartFRequirementItCan()
+        {
+            List<SystemCapabilityDescriptor> systemCapabilityDescriptors = Query.SystemCapabilityDescriptors(Directory_Resources());
+
+            //Continuous only - a natural-ventilation dwelling.
+            Assert.Equal("NV", Selected(systemCapabilityDescriptors, SystemCapability.ContinuousVentilation));
+
+            //Continuous plus boost, extract only - Approved Document F system 3.
+            Assert.Equal("EOL", Selected(systemCapabilityDescriptors, SystemCapability.ContinuousVentilation | SystemCapability.Boost));
+
+            //Continuous plus mechanical supply - balanced, no wet room above the whole-dwelling rate.
+            Assert.Equal("MV", Selected(systemCapabilityDescriptors, SystemCapability.ContinuousVentilation | SystemCapability.MechanicalSupply));
+
+            //All three - system 4, the MVHR case. MV, because Part F does not require heat recovery.
+            Assert.Equal("MV", Selected(systemCapabilityDescriptors, SystemCapability.ContinuousVentilation | SystemCapability.MechanicalSupply | SystemCapability.Boost));
+
+            //Heat recovery, once something asks for it.
+            Assert.Equal("MVRE", Selected(systemCapabilityDescriptors, SystemCapability.ContinuousVentilation | SystemCapability.MechanicalSupply | SystemCapability.HeatRecovery));
+
+            //And nothing in the shipped library can bypass, so Iteration 2 is blocked loudly.
+            Assert.Null(Selected(systemCapabilityDescriptors, SystemCapability.ContinuousVentilation | SystemCapability.SummerBypass));
+        }
+
+        /// <summary>
+        /// <b>A balanced dwelling is never offered an extract-only system.</b> The defect a review found: a
+        /// design with a supply terminal in every habitable room - paragraph 1.67 - was met by
+        /// <c>Local Extract Only</c>, because extract-only does run continuously and can boost. The
+        /// overheating simulation would have run a system with no supply and no heat recovery against a
+        /// building that has both.
+        /// </summary>
+        [Fact]
+        public void BalancedDwelling_IsNeverOfferedAnExtractOnlySystem()
+        {
+            PartFDwellingResult partFDwellingResult = new("Flat 1")
+            {
+                ContinuousDesignSystemRate_Lps = 21.0,
+                TotalSupply_Lps = 21.0,
+                TotalHighSupply_Lps = 21.0,
+                TotalHighExtract_Lps = 39.0
+            };
+
+            SystemCapabilityRequirement systemCapabilityRequirement = partFDwellingResult.PartFSystemCapabilityRequirement();
+
+            Assert.True(systemCapabilityRequirement.Requires(SystemCapability.MechanicalSupply));
+
+            List<SystemCapabilityDescriptor> systemCapabilityDescriptors = Query.SystemCapabilityDescriptors(Directory_Resources());
+
+            foreach (SystemCapabilityDescriptor systemCapabilityDescriptor in systemCapabilityDescriptors.CapableSystems(systemCapabilityRequirement))
+            {
+                Assert.DoesNotContain(systemCapabilityDescriptor.SystemTemplate.Ventilation, new[] { "EOL", "EOC", "NV", "UV" });
+            }
+
+            Assert.Equal("MV", Selected(systemCapabilityDescriptors, systemCapabilityRequirement.Capabilities));
+        }
+
+        // ---------------------------------------------------------------------------------------------
         // Fixture
         // ---------------------------------------------------------------------------------------------
+
+        private static string Json_Index()
+        {
+            return File.ReadAllText(Path.Combine(Directory_Resources(), Query.CapabilityIndexFileName));
+        }
+
+        /// <summary>A temp directory holding one capability index, for the malformed-index cases.</summary>
+        private static string Directory_Temp(string json)
+        {
+            string result = Path.Combine(Path.GetTempPath(), "SAM_CapabilityIndex_" + Guid.NewGuid().ToString("N"));
+
+            Directory.CreateDirectory(result);
+            File.WriteAllText(Path.Combine(result, Query.CapabilityIndexFileName), json);
+
+            return result;
+        }
+
+        private static SystemTemplate Template(string ventilation)
+        {
+            return new SystemTemplate(ventilation, null, null, null, null, null);
+        }
+
+        private static string Selected(List<SystemCapabilityDescriptor> systemCapabilityDescriptors, SystemCapability systemCapability)
+        {
+            return systemCapabilityDescriptors.SelectPreferredCapableSystem(new SystemCapabilityRequirement(systemCapability)).SystemTemplate?.Ventilation;
+        }
 
         /// <summary>
         /// The repository's own resources directory, found by walking up from the test assembly. Read from
@@ -330,37 +555,56 @@ namespace SAM.Analytical.Systems.Tests
             throw new DirectoryNotFoundException("The SAM_Systems repository root was not found above " + AppContext.BaseDirectory);
         }
 
-        private static List<string> SensibleEfficiencies(string json)
+        private static List<double> SensibleEfficiencies(string json)
         {
             return Values(json, "SensibleEfficiency");
         }
 
-        private static List<string> LatentEfficiencies(string json)
+        private static List<double> LatentEfficiencies(string json)
         {
             return Values(json, "LatentEfficiency");
+        }
+
+        /// <summary>The names of the exchangers a template holds.</summary>
+        private static List<string> ExchangerNames(string json)
+        {
+            List<string> result = [];
+
+            foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(json, @"""Name"":\s*""(Exchanger[^""]*)"""))
+            {
+                if (!result.Contains(match.Groups[1].Value))
+                {
+                    result.Add(match.Groups[1].Value);
+                }
+            }
+
+            return result;
         }
 
         /// <summary>
         /// The distinct values of a named efficiency in a template, read by pattern rather than by
         /// deserialising - this test may open the file, but there is no reason to build the whole object
         /// graph to read one number, and doing so would make the test depend on every type in it.
+        /// <para>
+        /// Returned as numbers, not text: "0.0" and "0" are the same efficiency written two ways, and
+        /// sorting them as strings would put "0.7" before "10".
+        /// </para>
         /// </summary>
-        private static List<string> Values(string json, string name)
+        private static List<double> Values(string json, string name)
         {
-            List<string> result = [];
+            List<double> result = [];
 
-            foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(json, "\"" + name + "\":\\s*\\{[^}]*?\"Value\":\\s*([0-9.eE+-]+)"))
+            foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(json, @"""" + name + @""":\s*\{[^}]*?""Value"":\s*([0-9.eE+-]+)"))
             {
-                //"0.0" and "0" are the same number written two ways; compare as numbers.
-                string text = double.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                double value = double.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
 
-                if (!result.Contains(text))
+                if (!result.Contains(value))
                 {
-                    result.Add(text);
+                    result.Add(value);
                 }
             }
 
-            result.Sort(StringComparer.Ordinal);
+            result.Sort();
 
             return result;
         }

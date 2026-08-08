@@ -10,9 +10,9 @@ namespace SAM.Analytical.Systems
     public static partial class Query
     {
         /// <summary>
-        /// Loads a <see cref="SystemEnergyCentre"/> from a SAM JSON file. SAM writes an energy centre as a
+        /// Loads a <see cref="Core.Systems.SystemEnergyCentre"/> from a SAM JSON file. SAM writes an energy centre as a
         /// top-level JSON array whose first element is the energy centre, so the first non-null
-        /// <see cref="SystemEnergyCentre"/> in the file is returned. Returns null when the path is missing or
+        /// <see cref="Core.Systems.SystemEnergyCentre"/> in the file is returned. Returns null when the path is missing or
         /// unreadable, or holds no energy centre.
         /// </summary>
         /// <param name="path">Full path to a SAM energy-centre JSON file (e.g. a plant-room template).</param>

@@ -60,18 +60,41 @@ namespace SAM.Analytical.Systems
             {
                 if (!(jsonNode is JsonObject jsonObject_Template))
                 {
-                    continue;
+                    return null;
                 }
 
                 if (!(jsonObject_Template["SystemTemplate"] is JsonObject jsonObject_SystemTemplate))
                 {
+                    return null;
+                }
+
+                //An ABSENT ventilation key means the entry is not a ventilation template - a plant room is
+                //not a way of ventilating a dwelling - and is skipped. A key that is PRESENT but is not
+                //usable text is a broken entry, and refuses the whole index: skipping it would make one
+                //system quietly vanish from the library, which is the silent shortfall this reader exists to
+                //avoid.
+                if (jsonObject_SystemTemplate.ContainsKey("Ventilation") == false)
+                {
                     continue;
                 }
 
-                SystemTemplate systemTemplate = new SystemTemplate(jsonObject_SystemTemplate);
+                //Read as text rather than through SystemTemplate's own JSON constructor, which calls
+                //GetValue<string> and throws on a non-string - and built through the six-argument
+                //constructor, so the property setters normalise it. SystemTemplate's JSON path assigns its
+                //fields raw, so an entry reading "M V" would otherwise be offered as a selectable system
+                //that then resolves to nothing, because a caller's constructor-built "M V" is "MV".
+                string ventilation = Text(jsonObject_SystemTemplate, "Ventilation");
+
+                if (string.IsNullOrWhiteSpace(ventilation))
+                {
+                    return null;
+                }
+
+                SystemTemplate systemTemplate = new SystemTemplate(ventilation, Text(jsonObject_SystemTemplate, "Heating"), Text(jsonObject_SystemTemplate, "Cooling"), Text(jsonObject_SystemTemplate, "PlantRoom"), Text(jsonObject_SystemTemplate, "Controls"), Text(jsonObject_SystemTemplate, "Version"));
+
                 if (!systemTemplate.IsValid)
                 {
-                    continue;
+                    return null;
                 }
 
                 SystemCapability systemCapability = SystemCapability.None;
@@ -91,14 +114,25 @@ namespace SAM.Analytical.Systems
                     systemCapability |= SystemCapability.SummerBypass;
                 }
 
+                if (Flag(jsonObject_Template, "MechanicalSupply"))
+                {
+                    systemCapability |= SystemCapability.MechanicalSupply;
+                }
+
                 if (Flag(jsonObject_Template, "HeatRecovery"))
                 {
                     systemCapability |= SystemCapability.HeatRecovery;
                 }
 
-                //A missing rank is 0, which sorts before every stated one - so a half-edited index shows up
-                //as a tie and is refused, rather than quietly preferring the entry somebody forgot.
-                int rank = jsonObject_Template["Rank"] is JsonValue jsonValue && jsonValue.TryGetValue(out int rank_Temp) ? rank_Temp : 0;
+                //A missing or non-integer Rank REFUSES THE WHOLE INDEX. An earlier revision defaulted it to
+                //0 with a comment claiming that showed up as a tie and would be refused - which was simply
+                //wrong: one missing rank is a unique 0, it sorts FIRST, and the entry somebody forgot to
+                //rank becomes the preferred answer. A review found a case typo on VAV's "Rank" silently
+                //selecting a commercial variable-air-volume unit in place of a dwelling extract fan.
+                if (!(jsonObject_Template["Rank"] is JsonValue jsonValue_Rank) || !jsonValue_Rank.TryGetValue(out int rank))
+                {
+                    return null;
+                }
 
                 result.Add(new SystemCapabilityDescriptor(systemTemplate, systemCapability, rank));
             }
@@ -146,6 +180,15 @@ namespace SAM.Analytical.Systems
         private static bool Flag(JsonObject jsonObject, string name)
         {
             return jsonObject[name] is JsonValue jsonValue && jsonValue.TryGetValue(out bool result) && result;
+        }
+
+        /// <summary>
+        /// A string property of an index entry, or null where it is absent or is not a string. Never throws:
+        /// a hand-edited index must degrade rather than take a whole model down with it.
+        /// </summary>
+        private static string Text(JsonObject jsonObject, string name)
+        {
+            return jsonObject[name] is JsonValue jsonValue && jsonValue.TryGetValue(out string result) ? result : null;
         }
     }
 }
