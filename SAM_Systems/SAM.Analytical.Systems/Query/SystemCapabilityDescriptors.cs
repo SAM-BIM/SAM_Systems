@@ -2,6 +2,7 @@
 // Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using SAM.Analytical.Enums;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json.Nodes;
@@ -41,7 +42,19 @@ namespace SAM.Analytical.Systems
         /// Where to read the index from. Null uses the shipped resources directory. Supplied so a test can
         /// point at the repository's own resources rather than a copy.
         /// </param>
-        public static List<SystemCapabilityDescriptor> SystemCapabilityDescriptors(string directory = null)
+        /// <param name="systemApplication">
+        /// What kind of building is being assessed. <b>An eligibility constraint applied here, before
+        /// anything is handed over</b>: asking for <see cref="SystemApplication.Domestic"/> returns the
+        /// domestic templates and the ones marked <see cref="SystemApplication.Any"/>, and a commercial
+        /// air-handling type is not offered at all rather than merely ranked behind them. Approved
+        /// Document F selection must pass <c>Domestic</c>.
+        /// <para>
+        /// <see cref="SystemApplication.Undefined"/> applies no constraint and returns everything, which
+        /// is the right answer for a caller that has not said what it is assessing and the wrong one for
+        /// a dwelling.
+        /// </para>
+        /// </param>
+        public static List<SystemCapabilityDescriptor> SystemCapabilityDescriptors(string directory = null, SystemApplication systemApplication = SystemApplication.Undefined)
         {
             JsonObject jsonObject = SystemCapabilityIndex(directory);
             if (jsonObject == null)
@@ -74,6 +87,20 @@ namespace SAM.Analytical.Systems
                 //system quietly vanish from the library, which is the silent shortfall this reader exists to
                 //avoid.
                 if (jsonObject_SystemTemplate.ContainsKey("Ventilation") == false)
+                {
+                    continue;
+                }
+
+                //Eligibility, decided before the entry becomes a descriptor. An entry whose Application is
+                //missing or unrecognised is a broken entry and refuses the index: defaulting it to eligible
+                //would offer an unclassified template to a dwelling, and defaulting it to ineligible would
+                //make a system quietly vanish. Neither is a thing to guess at.
+                if (!Enum.TryParse(Text(jsonObject_Template, "Application"), out SystemApplication systemApplication_Template) || !Enum.IsDefined(typeof(SystemApplication), systemApplication_Template) || systemApplication_Template == SystemApplication.Undefined)
+                {
+                    return null;
+                }
+
+                if (!IsEligible(systemApplication_Template, systemApplication))
                 {
                     continue;
                 }
@@ -169,6 +196,24 @@ namespace SAM.Analytical.Systems
             {
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Whether a template of one application may be offered for an assessment of another.
+        /// <para>
+        /// <b>Only three things make a template eligible</b>: nothing was asked for, it is exactly what was
+        /// asked for, or it suits either. Everything else is excluded - a commercial air-handling type is
+        /// not a worse answer for a dwelling, it is not an answer.
+        /// </para>
+        /// </summary>
+        private static bool IsEligible(SystemApplication systemApplication_Template, SystemApplication systemApplication_Requested)
+        {
+            if (systemApplication_Requested == SystemApplication.Undefined)
+            {
+                return true;
+            }
+
+            return systemApplication_Template == systemApplication_Requested || systemApplication_Template == SystemApplication.Any;
         }
 
         /// <summary>

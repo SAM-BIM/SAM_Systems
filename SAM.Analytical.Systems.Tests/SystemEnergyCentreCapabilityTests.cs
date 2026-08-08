@@ -318,7 +318,9 @@ namespace SAM.Analytical.Systems.Tests
         {
             PartFDwellingResult partFDwellingResult = new("Flat 1") { ContinuousDesignSystemRate_Lps = 21.0, TotalHighExtract_Lps = 39.0 };
 
-            SystemCapabilitySelection systemCapabilitySelection = Query.SystemCapabilityDescriptors(Directory_Resources())
+            //Domestic: Approved Document F selection must never be offered a commercial air-handling type,
+            //and it is eligibility that guarantees it - not the ranks happening to favour domestic.
+            SystemCapabilitySelection systemCapabilitySelection = Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Domestic)
                 .SelectPreferredCapableSystem(partFDwellingResult.PartFSystemCapabilityRequirement());
 
             Assert.True(systemCapabilitySelection.IsSelected);
@@ -340,6 +342,153 @@ namespace SAM.Analytical.Systems.Tests
             Assert.Null(new SystemTemplate("NOPE", null, null, null, null, null).SystemEnergyCentreResource(Directory_Resources()));
             Assert.Null(new SystemTemplate("NOPE", null, null, null, null, null).SystemEnergyCentre(Directory_Resources()));
             Assert.Null(((SystemTemplate)null).SystemEnergyCentreResource(Directory_Resources()));
+        }
+
+        // ---------------------------------------------------------------------------------------------
+        // Application is an eligibility constraint
+        // ---------------------------------------------------------------------------------------------
+
+        /// <summary>
+        /// <b>A dwelling is offered the domestic templates and the ones marked <c>Any</c>, and nothing
+        /// else.</b> A commercial air-handling type is not a worse answer for a flat - it is not an
+        /// answer - so it is filtered out here, before anything reaches <c>SAM.Analytical</c>, which never
+        /// learns the words "domestic" or "commercial".
+        /// </summary>
+        [Fact]
+        public void DomesticRequest_IsOfferedOnlyDomesticAndAnyTemplates()
+        {
+            List<string> ventilations = Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Domestic).ConvertAll(x => x.SystemTemplate.Ventilation);
+
+            Assert.Equal(["NV", "EOL", "EOC", "MV", "MVRE", "UV"], Sorted(ventilations, ["NV", "EOL", "EOC", "MV", "MVRE", "UV"]));
+
+            foreach (string text in new[] { "CAV", "VAV", "DISP" })
+            {
+                Assert.DoesNotContain(text, ventilations);
+            }
+
+            //Undefined means no constraint, which is right for a caller that has not said what it is
+            //assessing and wrong for a dwelling. All nine come back.
+            Assert.Equal(9, Query.SystemCapabilityDescriptors(Directory_Resources()).Count);
+            Assert.Equal(9, Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Undefined).Count);
+
+            //And a commercial request gets the commercial ones plus Any.
+            Assert.Equal(["CAV", "VAV", "DISP", "UV"], Sorted(Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Commercial).ConvertAll(x => x.SystemTemplate.Ventilation), ["CAV", "VAV", "DISP", "UV"]));
+        }
+
+        /// <summary>
+        /// <b>Rank is not what keeps a commercial system out of a dwelling answer.</b> Every rank in the
+        /// index is inverted - so the commercial templates are ranked ahead of every domestic one - and a
+        /// domestic request still never sees them. Before <c>Application</c> became a constraint this test
+        /// would have returned a variable-air-volume unit for a flat, and one edited number was all it
+        /// would have taken.
+        /// </summary>
+        [Fact]
+        public void CommercialTemplates_AreExcludedByEligibilityAndNotByRank()
+        {
+            string json = Json_Index();
+
+            //Invert the order: 10 -> 90, 20 -> 80, ... so commercial sorts first.
+            foreach (int rank in new[] { 10, 20, 30, 40, 50, 60, 70, 80, 90 })
+            {
+                json = json.Replace("\"Rank\": " + rank + ",", "\"Rank\": " + (100 - rank) + "!,");
+            }
+
+            json = json.Replace("!,", ",");
+
+            string directory = Directory_Temp(json);
+
+            try
+            {
+                //The premise: commercial really is ranked ahead of domestic now.
+                List<SystemCapabilityDescriptor> systemCapabilityDescriptors_All = Query.SystemCapabilityDescriptors(directory);
+
+                Assert.Equal("DISP", systemCapabilityDescriptors_All.CapableSystems(new SystemCapabilityRequirement(SystemCapability.ContinuousVentilation))[0].SystemTemplate.Ventilation);
+
+                //The conclusion: a dwelling is still never offered one.
+                List<SystemCapabilityDescriptor> systemCapabilityDescriptors_Domestic = Query.SystemCapabilityDescriptors(directory, SystemApplication.Domestic);
+
+                foreach (SystemCapabilityDescriptor systemCapabilityDescriptor in systemCapabilityDescriptors_Domestic)
+                {
+                    Assert.DoesNotContain(systemCapabilityDescriptor.SystemTemplate.Ventilation, new[] { "CAV", "VAV", "DISP" });
+                }
+
+                PartFDwellingResult partFDwellingResult = new("Flat 1") { ContinuousDesignSystemRate_Lps = 21.0, TotalSupply_Lps = 21.0, TotalHighExtract_Lps = 39.0 };
+
+                SystemCapabilitySelection systemCapabilitySelection = systemCapabilityDescriptors_Domestic.SelectPreferredCapableSystem(partFDwellingResult.PartFSystemCapabilityRequirement());
+
+                Assert.True(systemCapabilitySelection.IsSelected);
+                Assert.Equal("MVRE", systemCapabilitySelection.SystemTemplate.Ventilation);
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        /// <summary>
+        /// An entry with a missing or unrecognised <c>Application</c> refuses the whole index. Defaulting
+        /// it to eligible would offer an unclassified template to a dwelling; defaulting it to ineligible
+        /// would make a system quietly vanish from the library. Neither is a thing to guess at.
+        /// </summary>
+        [Theory]
+        [InlineData("\"Application\": \"Domestic\",", "")]
+        [InlineData("\"Application\": \"Domestic\",", "\"Application\": \"Residential\",")]
+        [InlineData("\"Application\": \"Domestic\",", "\"Application\": \"Undefined\",")]
+        [InlineData("\"Application\": \"Domestic\",", "\"Application\": 3,")]
+        public void MissingOrUnrecognisedApplication_RefusesTheIndex(string find, string replace)
+        {
+            string directory = Directory_Temp(Json_Index().Replace(find, replace));
+
+            try
+            {
+                Assert.Null(Query.SystemCapabilityDescriptors(directory, SystemApplication.Domestic));
+                Assert.Null(Query.SystemCapabilityDescriptors(directory));
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        /// <summary>
+        /// <b>The commercial <c>Boost</c> values are recorded as unverified, not reasoned from a name.</b>
+        /// An earlier revision justified <c>CAV</c> and <c>DISP</c> boost = false from "constant volume"
+        /// and "displacement regime", which is inferring a capability from a label rather than knowing it.
+        /// The values stay false because false produces a refusal and true would produce a silently wrong
+        /// assessment - but the index must say they are unconfirmed.
+        /// </summary>
+        [Fact]
+        public void CommercialBoostDeclarations_AreRecordedAsUnverified()
+        {
+            JsonObject jsonObject = Query.SystemCapabilityIndex(Directory_Resources());
+
+            foreach (JsonNode jsonNode in jsonObject["Templates"] as JsonArray)
+            {
+                JsonObject jsonObject_Template = jsonNode as JsonObject;
+
+                if ((jsonObject_Template["Application"] as JsonValue)?.GetValue<string>() != "Commercial")
+                {
+                    //Nothing else may claim an unverified declaration without saying so here too.
+                    continue;
+                }
+
+                JsonArray jsonArray = jsonObject_Template["UnverifiedDeclarations"] as JsonArray;
+
+                Assert.NotNull(jsonArray);
+
+                List<string> unverified = [];
+                foreach (JsonNode jsonNode_Unverified in jsonArray)
+                {
+                    unverified.Add((jsonNode_Unverified as JsonValue)?.GetValue<string>());
+                }
+
+                Assert.Contains("Boost", unverified);
+
+                //And the name-derived justifications are gone from the descriptions.
+                string description = (jsonObject_Template["Description"] as JsonValue)?.GetValue<string>() ?? string.Empty;
+
+                Assert.DoesNotContain("Boost false because", description);
+            }
         }
 
         // ---------------------------------------------------------------------------------------------
@@ -439,7 +588,7 @@ namespace SAM.Analytical.Systems.Tests
         [Fact]
         public void ShippedLibrary_AnswersEveryPartFRequirementItCan()
         {
-            List<SystemCapabilityDescriptor> systemCapabilityDescriptors = Query.SystemCapabilityDescriptors(Directory_Resources());
+            List<SystemCapabilityDescriptor> systemCapabilityDescriptors = Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Domestic);
 
             //Continuous only - a natural-ventilation dwelling.
             Assert.Equal("NV", Selected(systemCapabilityDescriptors, SystemCapability.ContinuousVentilation));
@@ -482,7 +631,7 @@ namespace SAM.Analytical.Systems.Tests
 
             Assert.True(systemCapabilityRequirement.Requires(SystemCapability.MechanicalSupply));
 
-            List<SystemCapabilityDescriptor> systemCapabilityDescriptors = Query.SystemCapabilityDescriptors(Directory_Resources());
+            List<SystemCapabilityDescriptor> systemCapabilityDescriptors = Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Domestic);
 
             foreach (SystemCapabilityDescriptor systemCapabilityDescriptor in systemCapabilityDescriptors.CapableSystems(systemCapabilityRequirement))
             {
@@ -495,6 +644,34 @@ namespace SAM.Analytical.Systems.Tests
         // ---------------------------------------------------------------------------------------------
         // Fixture
         // ---------------------------------------------------------------------------------------------
+
+        /// <summary>
+        /// The given names in the given order, so a set comparison reads as a set rather than depending on
+        /// the order the index happens to list them in.
+        /// </summary>
+        private static List<string> Sorted(List<string> texts, IEnumerable<string> order)
+        {
+            List<string> result = [];
+
+            foreach (string text in order)
+            {
+                if (texts.Contains(text))
+                {
+                    result.Add(text);
+                }
+            }
+
+            //Anything unexpected is appended, so a surplus entry fails the comparison rather than hiding.
+            foreach (string text in texts)
+            {
+                if (!result.Contains(text))
+                {
+                    result.Add(text);
+                }
+            }
+
+            return result;
+        }
 
         private static string Json_Index()
         {
