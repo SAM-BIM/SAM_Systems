@@ -76,7 +76,7 @@ namespace SAM.Analytical.Systems.Tests
         [Fact]
         public void EveryVentilationEntry_ResolvesToAShippedFile()
         {
-            List<SystemCapabilityDescriptor> systemCapabilityDescriptors = Query.SystemCapabilityDescriptors(Directory_Resources());
+            List<SystemCapabilityDescriptor> systemCapabilityDescriptors = Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Undefined);
 
             Assert.NotNull(systemCapabilityDescriptors);
             Assert.Equal(9, systemCapabilityDescriptors.Count);
@@ -106,18 +106,29 @@ namespace SAM.Analytical.Systems.Tests
         [Fact]
         public void EveryEntry_HasADistinctIdentityAndRank()
         {
-            List<SystemCapabilityDescriptor> systemCapabilityDescriptors = Query.SystemCapabilityDescriptors(Directory_Resources());
+            List<SystemCapabilityDescriptor> systemCapabilityDescriptors = Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Undefined);
 
             HashSet<string> ventilations = [];
-            HashSet<int> ranks = [];
 
             foreach (SystemCapabilityDescriptor systemCapabilityDescriptor in systemCapabilityDescriptors)
             {
                 Assert.True(ventilations.Add(systemCapabilityDescriptor.SystemTemplate.Ventilation), string.Format("'{0}' appears twice.", systemCapabilityDescriptor.SystemTemplate.Ventilation));
-                Assert.True(ranks.Add(systemCapabilityDescriptor.Rank), string.Format("Rank {0} is used twice.", systemCapabilityDescriptor.Rank));
 
                 //Rank 0 is what a missing rank reads as, so a real entry must never carry it.
                 Assert.NotEqual(0, systemCapabilityDescriptor.Rank);
+            }
+
+            //Ranks must be distinct WITHIN an application, which is the only set they ever order. Requiring
+            //them globally distinct would forbid a harmless CAV/NV collision and read as a real constraint
+            //to whoever confirms the provisional domestic order.
+            foreach (SystemApplication systemApplication in new[] { SystemApplication.Domestic, SystemApplication.Commercial })
+            {
+                HashSet<int> ranks = [];
+
+                foreach (SystemCapabilityDescriptor systemCapabilityDescriptor in Query.SystemCapabilityDescriptors(Directory_Resources(), systemApplication))
+                {
+                    Assert.True(ranks.Add(systemCapabilityDescriptor.Rank), string.Format("Rank {0} is used twice within {1}, so the preferred system would be refused as ambiguous.", systemCapabilityDescriptor.Rank, systemApplication));
+                }
             }
         }
 
@@ -139,7 +150,7 @@ namespace SAM.Analytical.Systems.Tests
         [Fact]
         public void HeatRecovery_MatchesTheShippedTemplates()
         {
-            foreach (SystemCapabilityDescriptor systemCapabilityDescriptor in Query.SystemCapabilityDescriptors(Directory_Resources()))
+            foreach (SystemCapabilityDescriptor systemCapabilityDescriptor in Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Undefined))
             {
                 string resource = systemCapabilityDescriptor.SystemTemplate.SystemEnergyCentreResource(Directory_Resources());
 
@@ -178,7 +189,7 @@ namespace SAM.Analytical.Systems.Tests
         [Fact]
         public void SummerBypass_IsAbsentFromEveryShippedTemplateAndFromTheIndex()
         {
-            List<SystemCapabilityDescriptor> systemCapabilityDescriptors = Query.SystemCapabilityDescriptors(Directory_Resources());
+            List<SystemCapabilityDescriptor> systemCapabilityDescriptors = Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Undefined);
 
             Assert.NotNull(systemCapabilityDescriptors);
             Assert.NotEmpty(systemCapabilityDescriptors);
@@ -205,7 +216,7 @@ namespace SAM.Analytical.Systems.Tests
             }
 
             //So a Part O scenario asking for bypass gets a refusal rather than a system that cannot do it.
-            SystemCapabilitySelection systemCapabilitySelection = Query.SystemCapabilityDescriptors(Directory_Resources())
+            SystemCapabilitySelection systemCapabilitySelection = Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Undefined)
                 .SelectPreferredCapableSystem(new SystemCapabilityRequirement(SystemCapability.ContinuousVentilation | SystemCapability.SummerBypass));
 
             Assert.False(systemCapabilitySelection.IsSelected);
@@ -273,10 +284,10 @@ namespace SAM.Analytical.Systems.Tests
                 //Nothing else is there. Confirmed rather than assumed, so this cannot pass by accident.
                 Assert.Single(Directory.GetFiles(directory));
 
-                List<SystemCapabilityDescriptor> systemCapabilityDescriptors = Query.SystemCapabilityDescriptors(directory);
+                List<SystemCapabilityDescriptor> systemCapabilityDescriptors = Query.SystemCapabilityDescriptors(directory, SystemApplication.Undefined);
 
                 Assert.NotNull(systemCapabilityDescriptors);
-                Assert.Equal(Query.SystemCapabilityDescriptors(Directory_Resources()).Count, systemCapabilityDescriptors.Count);
+                Assert.Equal(Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Undefined).Count, systemCapabilityDescriptors.Count);
 
                 //Every requirement Part F can produce, answered identically without a template in sight.
                 foreach (SystemCapability systemCapability in new[]
@@ -290,7 +301,7 @@ namespace SAM.Analytical.Systems.Tests
                     SystemCapabilityRequirement systemCapabilityRequirement = new(systemCapability);
 
                     Assert.Equal(
-                        Query.SystemCapabilityDescriptors(Directory_Resources()).SelectPreferredCapableSystem(systemCapabilityRequirement).SystemTemplate?.Ventilation,
+                        Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Undefined).SelectPreferredCapableSystem(systemCapabilityRequirement).SystemTemplate?.Ventilation,
                         systemCapabilityDescriptors.SelectPreferredCapableSystem(systemCapabilityRequirement).SystemTemplate?.Ventilation);
                 }
 
@@ -359,6 +370,7 @@ namespace SAM.Analytical.Systems.Tests
         {
             List<string> ventilations = Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Domestic).ConvertAll(x => x.SystemTemplate.Ventilation);
 
+            Assert.Equal(6, ventilations.Count);
             Assert.Equal(["NV", "EOL", "EOC", "MV", "MVRE", "UV"], Sorted(ventilations, ["NV", "EOL", "EOC", "MV", "MVRE", "UV"]));
 
             foreach (string text in new[] { "CAV", "VAV", "DISP" })
@@ -368,11 +380,14 @@ namespace SAM.Analytical.Systems.Tests
 
             //Undefined means no constraint, which is right for a caller that has not said what it is
             //assessing and wrong for a dwelling. All nine come back.
-            Assert.Equal(9, Query.SystemCapabilityDescriptors(Directory_Resources()).Count);
+            Assert.Equal(9, Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Undefined).Count);
             Assert.Equal(9, Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Undefined).Count);
 
             //And a commercial request gets the commercial ones plus Any.
-            Assert.Equal(["CAV", "VAV", "DISP", "UV"], Sorted(Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Commercial).ConvertAll(x => x.SystemTemplate.Ventilation), ["CAV", "VAV", "DISP", "UV"]));
+            List<string> ventilations_Commercial = Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Commercial).ConvertAll(x => x.SystemTemplate.Ventilation);
+
+            Assert.Equal(4, ventilations_Commercial.Count);
+            Assert.Equal(["CAV", "VAV", "DISP", "UV"], Sorted(ventilations_Commercial, ["CAV", "VAV", "DISP", "UV"]));
         }
 
         /// <summary>
@@ -387,6 +402,10 @@ namespace SAM.Analytical.Systems.Tests
         {
             string json = Json_Index();
 
+            //The inversion below marks each replacement with '!' so it cannot be re-matched by a later
+            //pass. That only works while no '!' occurs in the file to begin with.
+            Assert.DoesNotContain("!", json);
+
             //Invert the order: 10 -> 90, 20 -> 80, ... so commercial sorts first.
             foreach (int rank in new[] { 10, 20, 30, 40, 50, 60, 70, 80, 90 })
             {
@@ -400,7 +419,7 @@ namespace SAM.Analytical.Systems.Tests
             try
             {
                 //The premise: commercial really is ranked ahead of domestic now.
-                List<SystemCapabilityDescriptor> systemCapabilityDescriptors_All = Query.SystemCapabilityDescriptors(directory);
+                List<SystemCapabilityDescriptor> systemCapabilityDescriptors_All = Query.SystemCapabilityDescriptors(directory, SystemApplication.Undefined);
 
                 Assert.Equal("DISP", systemCapabilityDescriptors_All.CapableSystems(new SystemCapabilityRequirement(SystemCapability.ContinuousVentilation))[0].SystemTemplate.Ventilation);
 
@@ -442,7 +461,7 @@ namespace SAM.Analytical.Systems.Tests
             try
             {
                 Assert.Null(Query.SystemCapabilityDescriptors(directory, SystemApplication.Domestic));
-                Assert.Null(Query.SystemCapabilityDescriptors(directory));
+                Assert.Null(Query.SystemCapabilityDescriptors(directory, SystemApplication.Undefined));
             }
             finally
             {
@@ -466,13 +485,18 @@ namespace SAM.Analytical.Systems.Tests
             {
                 JsonObject jsonObject_Template = jsonNode as JsonObject;
 
-                if ((jsonObject_Template["Application"] as JsonValue)?.GetValue<string>() != "Commercial")
-                {
-                    //Nothing else may claim an unverified declaration without saying so here too.
-                    continue;
-                }
+                bool commercial = (jsonObject_Template["Application"] as JsonValue)?.GetValue<string>() == "Commercial";
 
                 JsonArray jsonArray = jsonObject_Template["UnverifiedDeclarations"] as JsonArray;
+
+                //**Asserted, not commented.** An earlier revision skipped non-commercial entries with a
+                //comment claiming they may not carry an unverified declaration - so adding one to MVRE, the
+                //entry every Part O heat-recovery decision rests on, would have stayed green.
+                if (!commercial)
+                {
+                    Assert.Null(jsonArray);
+                    continue;
+                }
 
                 Assert.NotNull(jsonArray);
 
@@ -484,10 +508,90 @@ namespace SAM.Analytical.Systems.Tests
 
                 Assert.Contains("Boost", unverified);
 
-                //And the name-derived justifications are gone from the descriptions.
+                //**Every unverified capability must be FALSE.** A review found VAV declaring Boost true
+                //while listing it as unverified - crediting a capability nobody confirmed, which the index's
+                //own note said could not happen. False refuses; true silently mis-assesses.
+                foreach (string text in unverified)
+                {
+                    Assert.False((jsonObject_Template[text] as JsonValue)?.GetValue<bool>(), string.Format("'{0}' declares {1} true while recording it as unverified. An unconfirmed capability must not be credited.", (jsonObject_Template["Resource"] as JsonValue)?.GetValue<string>(), text));
+                }
+
+                //And no reasoning from the type's NAME survives in the description - the whole point of
+                //requirement 3. Checked as "says nothing about boost at all" rather than as one exact
+                //phrase, which an earlier revision pinned and any rewording would have slipped past.
                 string description = (jsonObject_Template["Description"] as JsonValue)?.GetValue<string>() ?? string.Empty;
 
-                Assert.DoesNotContain("Boost false because", description);
+                Assert.DoesNotContain("boost", description, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        /// <summary>
+        /// <b>A request for <c>Any</c> means "I will take anything", not "only the entries marked Any".</b>
+        /// The enum is used in two roles - a classification on an entry, and a request from a caller - and a
+        /// review found the second reading inverted: asking for <c>Any</c> returned exactly one descriptor,
+        /// <c>UV</c>, the one template that can never be selected. Every dwelling would then have been
+        /// refused with a message about missing capabilities rather than about the filter.
+        /// </summary>
+        [Fact]
+        public void AnyAsARequest_MeansNoConstraint()
+        {
+            Assert.Equal(
+                Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Undefined).Count,
+                Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Any).Count);
+
+            Assert.Equal(9, Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Any).Count);
+        }
+
+        /// <summary>
+        /// <b>An <c>Application</c> that is numeric, or a comma-separated list, refuses the index.</b>
+        /// <c>Enum.TryParse</c> accepts both, and because the members number
+        /// <c>Domestic = 1, Commercial = 2, Any = 3</c>, a well-meaning <c>"Domestic,Commercial"</c> ORs to
+        /// <c>Any</c> - the most permissive value there is - and <c>Enum.IsDefined</c> cannot catch it
+        /// because the result genuinely is defined. That is the one hand-edit the refuse-rather-than-guess
+        /// design exists to stop, and it was the only one getting through.
+        /// </summary>
+        [Theory]
+        [InlineData("\"Application\": \"Domestic,Commercial\",")]
+        [InlineData("\"Application\": \"Domestic, Commercial\",")]
+        [InlineData("\"Application\": \"3\",")]
+        [InlineData("\"Application\": \"1\",")]
+        [InlineData("\"Application\": \"domestic\",")]
+        public void NumericOrListApplication_RefusesTheIndex(string replace)
+        {
+            string directory = Directory_Temp(Json_Index().Replace("\"Application\": \"Domestic\",", replace));
+
+            try
+            {
+                Assert.Null(Query.SystemCapabilityDescriptors(directory, SystemApplication.Domestic));
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        /// <summary>
+        /// <b>The eligibility guarantee is scoped to capability selection, and that limit is recorded here
+        /// rather than left for somebody to discover.</b> <c>SystemEnergyCentreResource</c> and
+        /// <c>SystemEnergyCentre</c> resolve by identity, after a choice has been made, and read no
+        /// <c>Application</c> at all - so a caller holding a commercial identity still resolves its file.
+        /// That is defensible for resolution, and it is also the mechanism by which the older
+        /// <c>Query.DefaultSystemEnergyCentres</c> / <c>Create.SystemEnergyCentre</c> path - which derives a
+        /// template from a file NAME and matches it against a space's internal condition, consulting neither
+        /// this index nor <c>Application</c> - can still put a commercial system in a dwelling model.
+        /// <b>Guarding that path is separate work</b>; this pins the current behaviour so the limit is
+        /// visible and a future fix has something to change.
+        /// </summary>
+        [Fact]
+        public void ResolutionIsIdentityDriven_AndDoesNotApplyEligibility()
+        {
+            Assert.Equal("VAV.json", Template("VAV").SystemEnergyCentreResource(Directory_Resources()));
+            Assert.NotNull(Template("VAV").SystemEnergyCentre(Directory_Resources()));
+
+            //Eligibility is decided upstream, where the descriptors are produced - and there it holds.
+            foreach (SystemCapabilityDescriptor systemCapabilityDescriptor in Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Domestic))
+            {
+                Assert.NotEqual("VAV", systemCapabilityDescriptor.SystemTemplate.Ventilation);
             }
         }
 
@@ -518,7 +622,7 @@ namespace SAM.Analytical.Systems.Tests
 
             try
             {
-                Assert.Null(Query.SystemCapabilityDescriptors(directory));
+                Assert.Null(Query.SystemCapabilityDescriptors(directory, SystemApplication.Undefined));
             }
             finally
             {
@@ -562,7 +666,7 @@ namespace SAM.Analytical.Systems.Tests
 
             try
             {
-                Assert.Contains("MV", Query.SystemCapabilityDescriptors(directory).ConvertAll(x => x.SystemTemplate.Ventilation));
+                Assert.Contains("MV", Query.SystemCapabilityDescriptors(directory, SystemApplication.Undefined).ConvertAll(x => x.SystemTemplate.Ventilation));
                 Assert.Equal("MV.json", Template("MV").SystemEnergyCentreResource(directory));
             }
             finally
@@ -648,6 +752,11 @@ namespace SAM.Analytical.Systems.Tests
         /// <summary>
         /// The given names in the given order, so a set comparison reads as a set rather than depending on
         /// the order the index happens to list them in.
+        /// <para>
+        /// <b>Set equality, not ordering, and it de-duplicates</b> - so callers assert the count separately.
+        /// A missing name shortens the list and a surplus one is appended, both of which fail the
+        /// comparison; a repeated one would not, which is what the count catches.
+        /// </para>
         /// </summary>
         private static List<string> Sorted(List<string> texts, IEnumerable<string> order)
         {

@@ -49,12 +49,19 @@ namespace SAM.Analytical.Systems
         /// air-handling type is not offered at all rather than merely ranked behind them. Approved
         /// Document F selection must pass <c>Domestic</c>.
         /// <para>
-        /// <see cref="SystemApplication.Undefined"/> applies no constraint and returns everything, which
-        /// is the right answer for a caller that has not said what it is assessing and the wrong one for
-        /// a dwelling.
+        /// <see cref="SystemApplication.Undefined"/> and <see cref="SystemApplication.Any"/> both apply no
+        /// constraint and return everything, which is the right answer for a caller that has not said what
+        /// it is assessing and the wrong one for a dwelling.
+        /// </para>
+        /// <para>
+        /// <b>Not optional, deliberately.</b> It was defaulted to <c>Undefined</c>, which made the
+        /// commercial-inclusive call the one you get by writing nothing - a comment saying "Part F must
+        /// pass Domestic" enforcing exactly what this parameter was added to stop being a comment. Every
+        /// caller now has to say what it is assessing, and choosing <c>Undefined</c> is a decision on the
+        /// record rather than an omission.
         /// </para>
         /// </param>
-        public static List<SystemCapabilityDescriptor> SystemCapabilityDescriptors(string directory = null, SystemApplication systemApplication = SystemApplication.Undefined)
+        public static List<SystemCapabilityDescriptor> SystemCapabilityDescriptors(string directory, SystemApplication systemApplication)
         {
             JsonObject jsonObject = SystemCapabilityIndex(directory);
             if (jsonObject == null)
@@ -95,7 +102,7 @@ namespace SAM.Analytical.Systems
                 //missing or unrecognised is a broken entry and refuses the index: defaulting it to eligible
                 //would offer an unclassified template to a dwelling, and defaulting it to ineligible would
                 //make a system quietly vanish. Neither is a thing to guess at.
-                if (!Enum.TryParse(Text(jsonObject_Template, "Application"), out SystemApplication systemApplication_Template) || !Enum.IsDefined(typeof(SystemApplication), systemApplication_Template) || systemApplication_Template == SystemApplication.Undefined)
+                if (!TryGetApplication(Text(jsonObject_Template, "Application"), out SystemApplication systemApplication_Template))
                 {
                     return null;
                 }
@@ -199,16 +206,58 @@ namespace SAM.Analytical.Systems
         }
 
         /// <summary>
+        /// An index entry's stated application, by <b>exact name</b>, or false where it says nothing usable.
+        /// <para>
+        /// <b>Not <c>Enum.TryParse</c>, and this is not fussiness.</b> That method accepts numeric text and
+        /// comma-separated name lists, and because the members happen to number
+        /// <c>Domestic = 1, Commercial = 2, Any = 3</c>, both <c>"3"</c> and <c>"Domestic,Commercial"</c>
+        /// parse to <c>Any</c> - the most permissive value in the vocabulary. <c>Enum.IsDefined</c> cannot
+        /// catch it, because the result genuinely is defined. So somebody hand-editing this index to say
+        /// "used in both" would make a commercial air-handling type eligible for a dwelling, silently, which
+        /// is the one hand-edit the whole refuse-rather-than-guess design exists to stop.
+        /// </para>
+        /// </summary>
+        private static bool TryGetApplication(string text, out SystemApplication systemApplication)
+        {
+            systemApplication = SystemApplication.Undefined;
+
+            //Ordinal and case-sensitive: an index is a written document, and "domestic" is a typo rather
+            //than a dialect. A typo refuses the whole index, which is the loud direction.
+            if (string.Equals(text, "Domestic", StringComparison.Ordinal))
+            {
+                systemApplication = SystemApplication.Domestic;
+            }
+            else if (string.Equals(text, "Commercial", StringComparison.Ordinal))
+            {
+                systemApplication = SystemApplication.Commercial;
+            }
+            else if (string.Equals(text, "Any", StringComparison.Ordinal))
+            {
+                systemApplication = SystemApplication.Any;
+            }
+
+            //Undefined is never a legal thing for an entry to SAY, only a legal thing for a caller to ask.
+            return systemApplication != SystemApplication.Undefined;
+        }
+
+        /// <summary>
         /// Whether a template of one application may be offered for an assessment of another.
         /// <para>
-        /// <b>Only three things make a template eligible</b>: nothing was asked for, it is exactly what was
-        /// asked for, or it suits either. Everything else is excluded - a commercial air-handling type is
-        /// not a worse answer for a dwelling, it is not an answer.
+        /// <b>The enum has two roles and they are not symmetrical</b>, which a review rightly called out.
+        /// As a <i>classification</i> on an entry it says what the template is for. As a <i>request</i> it
+        /// says what is being assessed - and there both <c>Undefined</c> ("I have not said") and
+        /// <c>Any</c> ("I will take anything") mean no constraint. Without that, a caller asking for
+        /// <c>Any</c> got back only the entries literally marked <c>Any</c>, which in this library is the
+        /// single template that can never be selected.
+        /// </para>
+        /// <para>
+        /// Otherwise a template is eligible when it is exactly what was asked for, or when it suits either.
+        /// A commercial air-handling type is not a worse answer for a dwelling; it is not an answer.
         /// </para>
         /// </summary>
         private static bool IsEligible(SystemApplication systemApplication_Template, SystemApplication systemApplication_Requested)
         {
-            if (systemApplication_Requested == SystemApplication.Undefined)
+            if (systemApplication_Requested == SystemApplication.Undefined || systemApplication_Requested == SystemApplication.Any)
             {
                 return true;
             }
