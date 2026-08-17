@@ -631,6 +631,63 @@ namespace SAM.Analytical.Systems.Tests
         }
 
         /// <summary>
+        /// <b>A broken entry refuses the index whoever is asking, including when the caller would never have
+        /// been offered it.</b> The defect a review found: eligibility was applied before the rest of an
+        /// entry was validated, so <c>continue</c> skipped the ventilation, identity and <c>Rank</c> checks
+        /// along with the entry - and the same half-edited catalogue was then accepted for one application
+        /// and refused for another.
+        /// <para>
+        /// <b>Broken here is VAV, which is <c>Commercial</c>, and that is the point.</b> It is precisely the
+        /// entry whose case-typo'd <c>"rank"</c> the reader's own comment records as the original defect. A
+        /// domestic request is never offered VAV, so the reordering is the only thing making a domestic
+        /// caller notice that the library it is reading from is half-edited. <c>MalformedIndex_ProducesNoDescriptors</c>
+        /// breaks EOL, a domestic entry, and so passed throughout.
+        /// </para>
+        /// </summary>
+        [Theory]
+        [InlineData("\"Rank\": 70,", "\"rank\": 70,")]
+        [InlineData("\"Rank\": 70,", "")]
+        [InlineData("\"Rank\": 70,", "\"Rank\": \"70\",")]
+        [InlineData("\"Ventilation\": \"VAV\"", "\"Ventilation\": 5")]
+        [InlineData("\"Ventilation\": \"VAV\"", "\"Ventilation\": \"\"")]
+        public void BrokenEntryOutsideTheRequestedApplication_StillRefusesTheIndex(string find, string replace)
+        {
+            string json = Json_Index();
+
+            //The premise: the text really is there to break, and it belongs to a commercial entry.
+            Assert.Contains(find, json);
+
+            string directory = Directory_Temp(json.Replace(find, replace));
+
+            try
+            {
+                //Every request kind, including the two that would never see VAV.
+                foreach (SystemApplication systemApplication in new[] { SystemApplication.Domestic, SystemApplication.Commercial, SystemApplication.Any, SystemApplication.Undefined })
+                {
+                    Assert.Null(Query.SystemCapabilityDescriptors(directory, systemApplication));
+                }
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        /// <summary>
+        /// The other half of the reordering: <b>validating every entry must not change which descriptors a
+        /// caller is offered</b>. An intact index answers exactly as before - so the fix above cannot have
+        /// been bought by leaking commercial templates into a domestic answer.
+        /// </summary>
+        [Fact]
+        public void ValidatingEveryEntry_DoesNotChangeWhatIsOffered()
+        {
+            Assert.Equal(["NV", "EOL", "EOC", "MV", "MVRE", "UV"], Sorted(Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Domestic).ConvertAll(x => x.SystemTemplate.Ventilation), ["NV", "EOL", "EOC", "MV", "MVRE", "UV"]));
+            Assert.Equal(["CAV", "VAV", "DISP", "UV"], Sorted(Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Commercial).ConvertAll(x => x.SystemTemplate.Ventilation), ["CAV", "VAV", "DISP", "UV"]));
+            Assert.Equal(6, Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Domestic).Count);
+            Assert.Equal(4, Query.SystemCapabilityDescriptors(Directory_Resources(), SystemApplication.Commercial).Count);
+        }
+
+        /// <summary>
         /// A <c>Resource</c> is a file name in the resources directory and nothing else. An index that
         /// reached outside the directory it ships in would load whatever it was pointed at.
         /// </summary>

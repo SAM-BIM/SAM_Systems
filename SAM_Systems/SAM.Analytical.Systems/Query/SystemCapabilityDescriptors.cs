@@ -98,19 +98,22 @@ namespace SAM.Analytical.Systems
                     continue;
                 }
 
-                //Eligibility, decided before the entry becomes a descriptor. An entry whose Application is
-                //missing or unrecognised is a broken entry and refuses the index: defaulting it to eligible
-                //would offer an unclassified template to a dwelling, and defaulting it to ineligible would
-                //make a system quietly vanish. Neither is a thing to guess at.
+                //An entry whose Application is missing or unrecognised is a broken entry and refuses the
+                //index: defaulting it to eligible would offer an unclassified template to a dwelling, and
+                //defaulting it to ineligible would make a system quietly vanish. Neither is a thing to guess
+                //at.
                 if (!TryGetApplication(Text(jsonObject_Template, "Application"), out SystemApplication systemApplication_Template))
                 {
                     return null;
                 }
 
-                if (!IsEligible(systemApplication_Template, systemApplication))
-                {
-                    continue;
-                }
+                //**Eligibility is NOT applied here, and the ordering is the whole point.** Skipping an
+                //ineligible entry at this line skipped everything below it too, so a broken entry refused the
+                //index only when the caller happened to be asking for its application. A review found the
+                //exact hole the Rank comment below describes reopened by it: a case typo on VAV's "Rank"
+                //refuses an Any or Commercial request and is silently dropped from a Domestic one, so the
+                //same half-edited catalogue is accepted or rejected depending on who asks. **Every entry is
+                //validated first and eligibility filters the survivors**, below.
 
                 //Read as text rather than through SystemTemplate's own JSON constructor, which calls
                 //GetValue<string> and throws on a non-string - and built through the six-argument
@@ -166,6 +169,14 @@ namespace SAM.Analytical.Systems
                 if (!(jsonObject_Template["Rank"] is JsonValue jsonValue_Rank) || !jsonValue_Rank.TryGetValue(out int rank))
                 {
                     return null;
+                }
+
+                //Eligibility, applied LAST - see the note above. The entry is fully validated by this point,
+                //so an ineligible one has been proved sound before being left out, and the index refuses on a
+                //broken entry no matter which application the caller asked for.
+                if (!IsEligible(systemApplication_Template, systemApplication))
+                {
+                    continue;
                 }
 
                 result.Add(new SystemCapabilityDescriptor(systemTemplate, systemCapability, rank));
