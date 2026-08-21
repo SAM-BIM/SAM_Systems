@@ -162,7 +162,43 @@ jobs:
             & msbuild $sln /t:Rebuild @common
           }
 
+      - name: Test SAM.Analytical.Systems.Tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # The capability/template conformance suite must EXECUTE in CI, not merely compile. It is the
+          # only thing that checks CapabilityIndex.JSON against the shipped SystemEnergyCentre templates -
+          # that every template is accounted for, that a heat-recovery claim matches an exchanger in the
+          # file, and that no template models a summer bypass. A drifted index is otherwise invisible
+          # until it silently selects the wrong system for a dwelling.
+          #
+          # Targeted rather than a solution-wide `dotnet test`: this repo's other test project is already
+          # covered by its own history, and the conformance suite reads the repository's own resources
+          # from source, so it must run from the checkout rather than from a build output.
+          $project = Join-Path '${{ env.REPO_NAME }}' 'SAM.Analytical.Systems.Tests\SAM.Analytical.Systems.Tests.csproj'
+          if (-not (Test-Path $project)) { throw "Conformance test project not found: $project" }
+
+          # --no-build would need a matching Release layout; the solution Rebuild above already produced
+          # the dependencies this references, so a plain build here is cheap and avoids a config mismatch.
+          # /p:SAMVersion MATTERS. Three SAM_Systems projects write to the same build\ folder the artifact
+          # step publishes, so a test build without it recompiles them at the 1.0.0.0 local-dev fallback
+          # and silently overwrites the CI-stamped DLLs - shipping version-inconsistent assemblies.
+          & dotnet test $project -c Release "-p:SAMVersion=${{ steps.ver.outputs.samversion }}" --logger 'trx;LogFileName=SAM.Analytical.Systems.Tests.trx' --results-directory 'TestResults'
+          if ($LASTEXITCODE -ne 0) { throw "SAM.Analytical.Systems.Tests failed." }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.REPO_NAME }}-test-results
+          path: TestResults/*.trx
+          if-no-files-found: warn
+
       - name: Upload build folders (optional)
+        # always(): a failing test must not also cost the build artifacts, which are what you need to
+        # diagnose it.
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.REPO_NAME }}-build-folders
