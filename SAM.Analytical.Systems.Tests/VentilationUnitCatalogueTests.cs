@@ -1,0 +1,725 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Analytical.Enums;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text.Json.Nodes;
+using Xunit;
+
+namespace SAM.Analytical.Systems.Tests
+{
+    /// <summary>
+    /// <b>The shipped manufacturer ventilation unit catalogue, checked against the document it was
+    /// transcribed from.</b>
+    /// <para>
+    /// <c>SAM.Analytical</c> owns the vocabulary and the Approved Document O selection rule and is handed
+    /// descriptors; which products exist is a fact about <i>this</i> repository. So this is where a real
+    /// manufacturer is named, and this is where the assertion "the file says what the brochure says"
+    /// belongs.
+    /// </para>
+    /// <para>
+    /// <b>What the tables below are, and what they are not.</b> They are a second transcription of the
+    /// Nuaire selection tables, laid out the way the brochure lays them out - one block per external air
+    /// temperature, one row per internal temperature, one column per published airflow. That catches the
+    /// realistic failure: a flattening, ordering or off-by-one mistake between the document's layout and
+    /// the catalogue's single flat array. It does not catch a misreading shared by both transcriptions,
+    /// and nobody should read it as claiming to. The supply air temperatures were separately confirmed
+    /// against the engineering spreadsheet that preceded this work, which holds the same 3 x 4 x 8 table.
+    /// </para>
+    /// <para>
+    /// <b>The capacity tests are the point of the exercise.</b> The brochure states no maximum supply or
+    /// extract airflow for this unit, so the catalogue states none, and several tests below exist purely
+    /// to prove that the 120 l/s at the end of the performance table has not quietly become one.
+    /// </para>
+    /// </summary>
+    public class VentilationUnitCatalogueTests
+    {
+        private const string manufacturer_Nuaire = "Nuaire";
+
+        private const string model_Nuaire = "MRXBOXAB-ECO5-AECV";
+
+        private const string coolingModule_Nuaire = "MR-ECO-COOL-V";
+
+        // =================================================================================================
+        // A. The catalogue reads, and says what it is
+        // =================================================================================================
+
+        /// <summary>
+        /// The shipped catalogue reads, and holds the one product it is meant to: the Nuaire hybrid unit
+        /// with its cooling module, traceable to the brochure it came from.
+        /// </summary>
+        [Fact]
+        public void TheShippedCatalogue_HoldsTheNuaireHybridUnit()
+        {
+            VentilationUnitTemplate ventilationUnitTemplate = Nuaire();
+
+            Assert.True(ventilationUnitTemplate.IsValid);
+
+            Assert.Equal(manufacturer_Nuaire, ventilationUnitTemplate.VentilationUnitReference.Manufacturer);
+            Assert.Equal(model_Nuaire, ventilationUnitTemplate.VentilationUnitReference.Model);
+
+            //The cooling module is part of the IDENTITY, because the same base unit with and without it
+            //publishes different performance and is a different thing to select.
+            Assert.Equal(coolingModule_Nuaire, ventilationUnitTemplate.VentilationUnitReference.Reference);
+            Assert.Equal(coolingModule_Nuaire, ventilationUnitTemplate.CoolingModuleModel);
+
+            //Every figure on the template can be traced back to a document.
+            Assert.Contains("Nuaire", ventilationUnitTemplate.Source);
+            Assert.Contains("MRXBOX Hybrid Cooling System", ventilationUnitTemplate.Source);
+            Assert.Contains("July 2022", ventilationUnitTemplate.Source);
+
+            //And the brochure's own caveat travels with it, rather than being lost on the way in.
+            Assert.Contains("TYPICAL", ventilationUnitTemplate.Source, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>The catalogue declares its schema, so a later format change can be told from a corrupt file.</summary>
+        [Fact]
+        public void TheShippedCatalogue_DeclaresItsSchema()
+        {
+            JsonObject jsonObject = Query.VentilationUnitCatalogue(Directory_Resources());
+
+            Assert.NotNull(jsonObject);
+            Assert.Equal("VentilationUnitCatalogue:v1", jsonObject["Schema"]?.ToString());
+            Assert.NotNull(jsonObject["Note"]);
+
+            //The reader and the file agree on the name, so neither can be renamed alone.
+            Assert.True(File.Exists(Path.Combine(Directory_Resources(), Query.VentilationUnitCatalogueFileName)));
+        }
+
+        // =================================================================================================
+        // B. The raw manufacturer data
+        // =================================================================================================
+
+        /// <summary>
+        /// The published conditions are preserved exactly as conditions - three external temperatures, four
+        /// internal, eight airflows - and every one of the 96 points is kept for both published quantities.
+        /// <para>
+        /// Not a slice of them, and not a curve fitted through them. The legacy route kept a single 80 l/s
+        /// slice; a slice cannot answer what the unit does at 110 l/s, and an equation cannot be checked
+        /// against the brochure.
+        /// </para>
+        /// </summary>
+        [Fact]
+        public void TheNuaireRawAxes_ArePreservedExactly()
+        {
+            VentilationUnitPerformanceTable ventilationUnitPerformanceTable = Nuaire().PerformanceTable;
+
+            Assert.NotNull(ventilationUnitPerformanceTable);
+            Assert.True(ventilationUnitPerformanceTable.IsValid);
+            Assert.Equal(3, ventilationUnitPerformanceTable.AxisCount);
+
+            Assert.Equal(new double[] { 29, 32, 34 }, ventilationUnitPerformanceTable.Axis(VentilationUnitPerformanceAxis.Name_ExternalDryBulbTemperature).Values);
+            Assert.Equal(new double[] { 23, 24, 25, 26 }, ventilationUnitPerformanceTable.Axis(VentilationUnitPerformanceAxis.Name_EnteringDryBulbTemperature).Values);
+            Assert.Equal(new double[] { 50, 60, 70, 80, 90, 100, 110, 120 }, ventilationUnitPerformanceTable.Axis(VentilationUnitPerformanceAxis.Name_AirFlowRate).Values);
+
+            Assert.Equal("degC", ventilationUnitPerformanceTable.Axis(VentilationUnitPerformanceAxis.Name_ExternalDryBulbTemperature).Unit);
+            Assert.Equal("degC", ventilationUnitPerformanceTable.Axis(VentilationUnitPerformanceAxis.Name_EnteringDryBulbTemperature).Unit);
+            Assert.Equal("l/s", ventilationUnitPerformanceTable.Axis(VentilationUnitPerformanceAxis.Name_AirFlowRate).Unit);
+
+            Assert.Equal(96, ventilationUnitPerformanceTable.PointCount);
+            Assert.Equal(96, ventilationUnitPerformanceTable.Output(VentilationUnitPerformanceOutput.Name_SupplyAirTemperature).Count);
+            Assert.Equal(96, ventilationUnitPerformanceTable.Output(VentilationUnitPerformanceOutput.Name_CombinedCoolingCapacity).Count);
+
+            Assert.Equal("degC", ventilationUnitPerformanceTable.Output(VentilationUnitPerformanceOutput.Name_SupplyAirTemperature).Unit);
+            Assert.Equal("kW", ventilationUnitPerformanceTable.Output(VentilationUnitPerformanceOutput.Name_CombinedCoolingCapacity).Unit);
+        }
+
+        /// <summary>
+        /// Representative published values, quoted from the brochure page: the first cell of each block,
+        /// the last, and a few in between, on both outputs.
+        /// </summary>
+        [Fact]
+        public void RepresentativeNuaireValues_MatchTheBrochure()
+        {
+            VentilationUnitTemplate ventilationUnitTemplate = Nuaire();
+
+            //29 degC external, 23 degC internal, 50 l/s - the top-left cell of the first block.
+            Assert.Equal(14.3, ventilationUnitTemplate.SupplyAirTemperature_C(29, 23, 50));
+            Assert.Equal(0.88, ventilationUnitTemplate.CombinedCoolingCapacity_kW(29, 23, 50));
+
+            //29 / 23 / 80 - the cell the legacy spreadsheet kept a whole slice at.
+            Assert.Equal(15.7, ventilationUnitTemplate.SupplyAirTemperature_C(29, 23, 80));
+
+            //29 / 26 / 120 - the bottom-right of the first block.
+            Assert.Equal(19.8, ventilationUnitTemplate.SupplyAirTemperature_C(29, 26, 120));
+            Assert.Equal(1.33, ventilationUnitTemplate.CombinedCoolingCapacity_kW(29, 26, 120));
+
+            //32 / 26 / 50 - the row the spreadsheet notes flagged as missing from an earlier transcription.
+            Assert.Equal(17.3, ventilationUnitTemplate.SupplyAirTemperature_C(32, 26, 50));
+            Assert.Equal(0.88, ventilationUnitTemplate.CombinedCoolingCapacity_kW(32, 26, 50));
+
+            //34 / 23 / 120 - the largest combined cooling figure the brochure publishes.
+            Assert.Equal(18.9, ventilationUnitTemplate.SupplyAirTemperature_C(34, 23, 120));
+            Assert.Equal(2.20, ventilationUnitTemplate.CombinedCoolingCapacity_kW(34, 23, 120));
+
+            //34 / 26 / 120 - the bottom-right of the whole table.
+            Assert.Equal(21.2, ventilationUnitTemplate.SupplyAirTemperature_C(34, 26, 120));
+            Assert.Equal(1.85, ventilationUnitTemplate.CombinedCoolingCapacity_kW(34, 26, 120));
+        }
+
+        /// <summary>
+        /// <b>Every one of the 96 published points, for both quantities</b>, against a transcription laid
+        /// out the way the brochure is - so a flattening or ordering mistake shows up as a specific cell
+        /// rather than as a plausible table.
+        /// </summary>
+        [Fact]
+        public void TheWholeNuaireTable_MatchesTheBrochure()
+        {
+            VentilationUnitTemplate ventilationUnitTemplate = Nuaire();
+
+            double[] externals = new double[] { 29, 32, 34 };
+            double[] enterings = new double[] { 23, 24, 25, 26 };
+            double[] airFlowRates_Lps = new double[] { 50, 60, 70, 80, 90, 100, 110, 120 };
+
+            double[][] supplyAirTemperatures_C = SupplyAirTemperatures_C();
+            double[][] combinedCoolingCapacities_kW = CombinedCoolingCapacities_kW();
+
+            for (int i = 0; i < externals.Length; i++)
+            {
+                for (int j = 0; j < enterings.Length; j++)
+                {
+                    for (int k = 0; k < airFlowRates_Lps.Length; k++)
+                    {
+                        string where = string.Format("{0} degC external, {1} degC internal, {2} l/s", externals[i], enterings[j], airFlowRates_Lps[k]);
+
+                        Assert.True(
+                            supplyAirTemperatures_C[(i * 4) + j][k] == ventilationUnitTemplate.SupplyAirTemperature_C(externals[i], enterings[j], airFlowRates_Lps[k]),
+                            "Supply air temperature at " + where);
+
+                        Assert.True(
+                            combinedCoolingCapacities_kW[(i * 4) + j][k] == ventilationUnitTemplate.CombinedCoolingCapacity_kW(externals[i], enterings[j], airFlowRates_Lps[k]),
+                            "Combined cooling at " + where);
+                    }
+                }
+            }
+        }
+
+        // =================================================================================================
+        // C. Capacity is not a duty point
+        // =================================================================================================
+
+        /// <summary>
+        /// <b>The unresolved fact, and the reason this catalogue does not invent one.</b> The brochure
+        /// states no maximum supply or extract airflow, so the template states none - and the 120 l/s that
+        /// ends its performance table has not become one.
+        /// </summary>
+        [Fact]
+        public void TheNuaireCapacity_IsUnresolvedAndIsNotTheTablesLargestAirflow()
+        {
+            VentilationUnitTemplate ventilationUnitTemplate = Nuaire();
+
+            Assert.True(double.IsNaN(ventilationUnitTemplate.MaximumSupplyFlowRate_Lps));
+            Assert.True(double.IsNaN(ventilationUnitTemplate.MaximumExtractFlowRate_Lps));
+            Assert.False(ventilationUnitTemplate.HasSelectionCapacity);
+
+            //The number it would have been, had anybody reached for it.
+            Assert.Equal(120, ventilationUnitTemplate.PerformanceTable.Axis(VentilationUnitPerformanceAxis.Name_AirFlowRate).Maximum);
+
+            //The absence is documented on the entry, with what would resolve it.
+            Assert.Contains("brochure states no maximum supply or extract airflow", ventilationUnitTemplate.UnresolvedCapacityNote);
+            Assert.Contains("duty points", ventilationUnitTemplate.UnresolvedCapacityNote);
+
+            //So the product is complete data and is simply not selectable.
+            Assert.Null(Analytical.Query.CapacityDescriptor(ventilationUnitTemplate));
+            Assert.Empty(Query.VentilationUnitCapacityDescriptors(Directory_Resources()));
+        }
+
+        /// <summary>
+        /// The unselectable product is <b>reported</b>, not silently absent. A missing product is exactly
+        /// the kind of gap nobody notices until they wonder why the unit they specified was never chosen.
+        /// </summary>
+        [Fact]
+        public void TheUnselectableProduct_IsReportedRatherThanSilentlyAbsent()
+        {
+            List<VentilationUnitTemplate> ventilationUnitTemplates = Query.VentilationUnitTemplates(Directory_Resources());
+
+            Assert.NotNull(ventilationUnitTemplates);
+            Assert.NotEmpty(ventilationUnitTemplates);
+
+            KeyValuePair<VentilationUnitTemplate, string> unselectable = Assert.Single(Analytical.Query.UnselectableVentilationUnitTemplates(ventilationUnitTemplates));
+
+            Assert.Equal(model_Nuaire, unselectable.Key.VentilationUnitReference.Model);
+            Assert.Contains("maximum supply and maximum extract airflow", unselectable.Value);
+            Assert.Contains("published duty point, not the unit's maximum", unselectable.Value);
+        }
+
+        /// <summary>
+        /// A duty the 120 l/s endpoint would have covered selects nothing at all, which is the behaviour
+        /// the whole arrangement exists to produce: a loud absence rather than a plausible answer.
+        /// </summary>
+        [Fact]
+        public void ADutyTheTableEndpointWouldHaveCovered_SelectsNothing()
+        {
+            VentilationUnitSelection ventilationUnitSelection = Analytical.Query.SelectSmallestCapableVentilationUnit(Query.VentilationUnitCapacityDescriptors(Directory_Resources()), 100, 100);
+
+            Assert.False(ventilationUnitSelection.IsSelected);
+            Assert.Null(ventilationUnitSelection.Descriptor);
+            Assert.False(string.IsNullOrWhiteSpace(ventilationUnitSelection.Reason));
+        }
+
+        // =================================================================================================
+        // D. The control curve
+        // =================================================================================================
+
+        /// <summary>
+        /// The controller ramp is in the catalogue as data: 30% of airflow at 22 &#176;C rising to 100% at
+        /// 26 &#176;C, saturating above because the source says "and above".
+        /// </summary>
+        [Fact]
+        public void TheNuaireControlCurve_Is22DegreesTo30PercentAnd26DegreesTo100Percent()
+        {
+            FlowFractionControlCurve flowFractionControlCurve = Nuaire().FlowFractionByControlTemperature;
+
+            Assert.NotNull(flowFractionControlCurve);
+            Assert.True(flowFractionControlCurve.IsValid);
+
+            Assert.Equal(new double[] { 22, 26 }, flowFractionControlCurve.ControlTemperatures_C);
+            Assert.Equal(new double[] { 0.3, 1.0 }, flowFractionControlCurve.FlowFractions);
+
+            Assert.Equal(0.3, flowFractionControlCurve.FlowFraction(22));
+            Assert.Equal(1.0, flowFractionControlCurve.FlowFraction(26));
+            Assert.Equal(0.65, flowFractionControlCurve.FlowFraction(24), 12);
+
+            //"100% at 26 degrees and above" - stated on the curve, not assumed by whoever reads it.
+            Assert.Equal(PerformanceDomainPolicy.ClampToDomain, flowFractionControlCurve.PerformanceDomainPolicy);
+            Assert.Equal(1.0, flowFractionControlCurve.FlowFraction(31), 12);
+        }
+
+        // =================================================================================================
+        // E. SAM's own extrapolation arithmetic - NOT a legacy-compatibility claim
+        // =================================================================================================
+
+        /// <summary>
+        /// <b>What SAM answers outside the published domain under
+        /// <see cref="PerformanceDomainPolicy.OuterCellLinearExtrapolation"/>.</b>
+        /// <para>
+        /// <b>This test pins SAM's explicit linear extrapolation arithmetic. It is NOT an IES or TAS
+        /// compatibility test, and passing it proves nothing about either.</b> Every value below is this
+        /// library continuing the straight line through the two outermost published points; Nuaire has not
+        /// published any of them, none of them is in the catalogue, and none is manufacturer data.
+        /// </para>
+        /// <para>
+        /// <b>The legacy IES spreadsheet disagrees, and that is recorded rather than chased.</b> Its derived
+        /// figures give roughly 14.9 &#176;C at 26 / 23 / 80 where this policy gives 15.1, and roughly
+        /// 18.9 &#176;C at 26 / 26 / 120 where this policy gives 19.4. That spreadsheet is <b>historical
+        /// reference material and is not authoritative</b>: its derivation is not available, the engineer
+        /// who produced it is not available, and it is not being reconstructed. Its values are deliberately
+        /// not asserted anywhere - asserting them would either fail or bend this library towards a method
+        /// nobody has. Should a project ever require exact compatibility with that tool, it is a separate
+        /// task needing an authoritative specification or validated acceptance data.
+        /// </para>
+        /// <para>
+        /// The three authorities this suite keeps apart:
+        /// </para>
+        /// <code>
+        /// Nuaire raw published table   MANUFACTURER AUTHORITY           <- the catalogue, and only this
+        /// SAM linear extrapolation     explicit generic policy          <- what is pinned below
+        /// legacy IES spreadsheet       historical, NON-AUTHORITATIVE    <- neither stored nor asserted
+        /// </code>
+        /// <para>
+        /// <b>Read the downward cases sceptically.</b> Below the published 29 &#176;C external floor this is
+        /// a straight-line continuation of the 29-to-32 &#176;C gradient, and a hybrid coolth-recovery plus
+        /// direct-expansion unit does not behave linearly there. The further below 29 &#176;C a query goes,
+        /// the less its answer means. That is an argument for the default being
+        /// <see cref="PerformanceDomainPolicy.Refuse"/>; it is not an endorsement of these values.
+        /// </para>
+        /// </summary>
+        [Theory]
+        //Below the published external floor.
+        [InlineData(26, 23, 80, 15.1)]
+        [InlineData(26, 26, 80, 16.5)]
+        [InlineData(26, 23, 50, 13.6)]
+        [InlineData(26, 26, 120, 19.4)]
+        [InlineData(28, 23, 80, 15.5)]
+        //Above the published entering ceiling.
+        [InlineData(32, 27, 80, 19.1)]
+        [InlineData(29, 27, 80, 18.1)]
+        [InlineData(32, 28, 80, 19.7)]
+        [InlineData(29, 28, 80, 18.7)]
+        public void SAMsLinearExtrapolation_IsPinnedOutsideThePublishedDomain(double external_C, double entering_C, double airFlowRate_Lps, double expected_C)
+        {
+            VentilationUnitTemplate ventilationUnitTemplate = Nuaire();
+
+            //Outside the published domain, so the DEFAULT refuses - which is the whole point of the policy
+            //being named at the call site.
+            Assert.True(double.IsNaN(ventilationUnitTemplate.SupplyAirTemperature_C(external_C, entering_C, airFlowRate_Lps)));
+
+            Assert.Equal(
+                expected_C,
+                ventilationUnitTemplate.SupplyAirTemperature_C(external_C, entering_C, airFlowRate_Lps, PerformanceDomainPolicy.OuterCellLinearExtrapolation),
+                6);
+        }
+
+        /// <summary>
+        /// The policy changes nothing inside the published domain: a published condition returns the
+        /// published number exactly, whichever policy is named.
+        /// <para>
+        /// This is what will make a future legacy comparison interpretable - any disagreement with the
+        /// legacy workflow is then provably a disagreement about <i>extrapolation</i>, not about the
+        /// transcribed manufacturer data underneath it.
+        /// </para>
+        /// </summary>
+        [Fact]
+        public void EveryPolicy_ReturnsThePublishedValueInsideThePublishedDomain()
+        {
+            VentilationUnitTemplate ventilationUnitTemplate = Nuaire();
+
+            foreach (PerformanceDomainPolicy performanceDomainPolicy in new[] { PerformanceDomainPolicy.Refuse, PerformanceDomainPolicy.ClampToDomain, PerformanceDomainPolicy.OuterCellLinearExtrapolation })
+            {
+                Assert.Equal(15.7, ventilationUnitTemplate.SupplyAirTemperature_C(29, 23, 80, performanceDomainPolicy));
+                Assert.Equal(20.2, ventilationUnitTemplate.SupplyAirTemperature_C(32, 26, 120, performanceDomainPolicy));
+                Assert.Equal(2.20, ventilationUnitTemplate.CombinedCoolingCapacity_kW(34, 23, 120, performanceDomainPolicy));
+            }
+        }
+
+        // =================================================================================================
+        // F. A broken catalogue refuses, loudly
+        // =================================================================================================
+
+        /// <summary>
+        /// Every way of breaking one entry refuses the <b>whole</b> catalogue. Skipping the bad entry would
+        /// make a product quietly vanish, and a dwelling would then be told nothing offered could serve it
+        /// because of a typo nobody was shown.
+        /// </summary>
+        [Theory]
+        [InlineData("Source")]
+        [InlineData("RaggedGrid")]
+        [InlineData("DuplicateIdentity")]
+        [InlineData("UnusableCapacity")]
+        [InlineData("BrokenControlPolicy")]
+        [InlineData("MissingRank")]
+        [InlineData("NotAnObject")]
+        public void ABrokenEntry_RefusesTheWholeCatalogue(string defect)
+        {
+            string directory = TemporaryCatalogue(defect);
+
+            try
+            {
+                Assert.Null(Query.VentilationUnitTemplates(directory));
+                Assert.Null(Query.VentilationUnitCapacityDescriptors(directory));
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        /// <summary>
+        /// A missing catalogue is null rather than empty, so "there is no catalogue" and "the catalogue
+        /// offers nothing for this duty" stay distinguishable.
+        /// </summary>
+        [Fact]
+        public void AMissingCatalogue_IsNullRatherThanEmpty()
+        {
+            string directory = Path.Combine(Path.GetTempPath(), "SAM_VentilationUnitCatalogue_" + Guid.NewGuid().ToString("N"));
+
+            Directory.CreateDirectory(directory);
+
+            try
+            {
+                Assert.Null(Query.VentilationUnitCatalogue(directory));
+                Assert.Null(Query.VentilationUnitTemplates(directory));
+                Assert.Null(Query.VentilationUnitCapacityDescriptors(directory));
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        // =================================================================================================
+        // G. Deployment - the catalogue has to reach an installed SAM, not just a source checkout
+        // =================================================================================================
+
+        /// <summary>
+        /// <b>The repository path and the runtime-resolved path are the same path.</b>
+        /// <para>
+        /// A catalogue only a source checkout can find is not a catalogue. At runtime,
+        /// <c>Query.DefaultVentilationUnitDirectory</c> resolves
+        /// <c>&lt;resources&gt;/Analytical/Systems/VentilationUnit</c>, where the
+        /// <c>Analytical/Systems</c> part is <b>derived from this assembly's own name</b> by
+        /// <c>Core.Query.ResourcesDirectory</c> - it strips the leading <c>SAM.</c> and turns the remaining
+        /// dots into separators - and <c>VentilationUnit</c> comes from
+        /// <see cref="AnalyticalSystemSettingParameter.DefaultVentilationUnitDirectoryName"/>.
+        /// </para>
+        /// <para>
+        /// The shipped file has to sit at that same relative path under <c>files/resources</c>, because the
+        /// deployment step copies that tree wholesale. This test fails if the folder is moved in the
+        /// repository, if the setting is renamed, or if the assembly is renamed - each of which would
+        /// silently strand the catalogue in an installed SAM while every other test here still passed
+        /// against the checkout.
+        /// </para>
+        /// <para>
+        /// <b>Machine-independent by construction.</b> It compares relative shape, not any particular
+        /// machine's installed tree, so it means the same thing on a clean CI runner as on a developer box.
+        /// </para>
+        /// </summary>
+        [Fact]
+        public void TheCatalogue_SitsWhereTheRuntimeResolverWillLookForIt()
+        {
+            //Exactly what Core.Query.ResourcesDirectory(setting, assembly) derives from the assembly name.
+            string name = typeof(Query).Assembly.GetName().Name;
+
+            Assert.Equal("SAM.Analytical.Systems", name);
+
+            string segment = name.Substring(4).Replace(".", Path.DirectorySeparatorChar.ToString());
+
+            Assert.Equal("Analytical" + Path.DirectorySeparatorChar + "Systems", segment);
+
+            //And exactly what ActiveSetting defaults the leaf directory name to.
+            string leaf = ActiveSetting.GetDefault().GetValue<string>(AnalyticalSystemSettingParameter.DefaultVentilationUnitDirectoryName);
+
+            Assert.Equal("VentilationUnit", leaf);
+
+            //The shipped file must be at <resources>/<segment>/<leaf>/<file name>.
+            string directory_Resources = Directory_Resources();
+
+            string expected = Path.GetFullPath(Path.Combine(directory_Resources, "..", "..", "..", "..", "resources", segment, leaf, Query.VentilationUnitCatalogueFileName));
+
+            Assert.True(File.Exists(expected), "The shipped catalogue is not where the runtime resolver will look: " + expected);
+
+            //Same relative shape as the already-shipped sibling this deployment follows, so the catalogue
+            //rides the mechanism that is already proven to reach an install rather than a second one.
+            Assert.True(Directory.Exists(Path.Combine(Path.GetDirectoryName(directory_Resources), "SystemEnergyCentre")));
+            Assert.True(File.Exists(Path.Combine(Path.GetDirectoryName(directory_Resources), "SystemEnergyCentre", Query.CapabilityIndexFileName)));
+        }
+
+        /// <summary>
+        /// The reader's file name constant and the shipped file agree, so neither can be renamed alone -
+        /// a rename on one side only would deploy a file nothing opens.
+        /// </summary>
+        [Fact]
+        public void TheReaderAndTheShippedFile_AgreeOnTheFileName()
+        {
+            Assert.Equal("VentilationUnitCatalogue.JSON", Query.VentilationUnitCatalogueFileName);
+            Assert.True(File.Exists(Path.Combine(Directory_Resources(), Query.VentilationUnitCatalogueFileName)));
+
+            //And the directory really is named as the setting says, on disk.
+            Assert.Equal("VentilationUnit", new DirectoryInfo(Directory_Resources()).Name);
+        }
+
+        // =================================================================================================
+        // H. The seam, end to end
+        // =================================================================================================
+
+        /// <summary>
+        /// <b>The seam works.</b> A catalogue entry that <i>does</i> state its capacities reaches the
+        /// unchanged Approved Document O selection kernel and is chosen by it - so the only thing standing
+        /// between the Nuaire product and a selection is the manufacturer fact nobody has yet established.
+        /// </summary>
+        [Fact]
+        public void AResolvedCatalogueEntry_ReachesTheSelectionKernel()
+        {
+            string directory = TemporaryCatalogue("Resolved");
+
+            try
+            {
+                List<VentilationUnitCapacityDescriptor> ventilationUnitCapacityDescriptors = Query.VentilationUnitCapacityDescriptors(directory);
+
+                Assert.NotNull(ventilationUnitCapacityDescriptors);
+                Assert.Equal(2, ventilationUnitCapacityDescriptors.Count);
+
+                //Smallest compliant, never nearest - the kernel's own rule, over descriptors that came out
+                //of a file.
+                VentilationUnitSelection ventilationUnitSelection = Analytical.Query.SelectSmallestCapableVentilationUnit(ventilationUnitCapacityDescriptors, 55, 55);
+
+                Assert.True(ventilationUnitSelection.IsSelected);
+                Assert.Equal("FIXTURE-60", ventilationUnitSelection.VentilationUnitReference.Model);
+                Assert.Equal(5, ventilationUnitSelection.SupplyHeadroom_Lps, 6);
+
+                //And a duty neither can move is refused rather than answered with the larger one.
+                Assert.False(Analytical.Query.SelectSmallestCapableVentilationUnit(ventilationUnitCapacityDescriptors, 500, 500).IsSelected);
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        // =================================================================================================
+        // Fixtures
+        // =================================================================================================
+
+        private static VentilationUnitTemplate Nuaire()
+        {
+            List<VentilationUnitTemplate> ventilationUnitTemplates = Query.VentilationUnitTemplates(Directory_Resources());
+
+            Assert.NotNull(ventilationUnitTemplates);
+
+            VentilationUnitTemplate result = Assert.Single(ventilationUnitTemplates);
+
+            Assert.NotNull(result);
+
+            return result;
+        }
+
+        /// <summary>
+        /// Supply air temperature [degC], transcribed the way the brochure prints it: twelve rows of eight,
+        /// blocked by external air temperature (29, 32, 34) and within each block by internal temperature
+        /// (23, 24, 25, 26). Columns are 50, 60, 70, 80, 90, 100, 110, 120 l/s.
+        /// </summary>
+        private static double[][] SupplyAirTemperatures_C()
+        {
+            return
+            [
+                //29 degC external
+                [14.3, 14.8, 15.2, 15.7, 16.2, 16.7, 17.2, 17.8],
+                [15.0, 15.4, 15.9, 16.3, 16.8, 17.3, 17.8, 18.4],
+                [15.5, 15.9, 16.4, 16.9, 17.4, 18.0, 18.5, 19.1],
+                [15.9, 16.4, 17.0, 17.5, 18.1, 18.6, 19.2, 19.8],
+
+                //32 degC external
+                [15.0, 15.3, 15.8, 16.3, 17.0, 17.7, 18.4, 19.1],
+                [16.0, 16.4, 16.8, 17.2, 17.8, 18.3, 18.9, 19.6],
+                [16.6, 17.0, 17.4, 17.9, 18.3, 18.8, 19.3, 19.9],
+                [17.3, 17.7, 18.1, 18.5, 18.9, 19.3, 19.7, 20.2],
+
+                //34 degC external
+                [15.4, 15.9, 16.4, 16.9, 17.4, 17.9, 18.4, 18.9],
+                [16.0, 16.5, 17.0, 17.5, 18.0, 18.5, 19.0, 19.5],
+                [16.9, 17.4, 17.9, 18.4, 18.9, 19.4, 19.9, 20.4],
+                [17.8, 18.3, 18.8, 19.3, 19.7, 20.2, 20.7, 21.2],
+            ];
+        }
+
+        /// <summary>
+        /// Combined cooling [kW] - coolth recovery and sensible cooling together, as the brochure defines
+        /// it - in the same twelve-by-eight layout as <see cref="SupplyAirTemperatures_C"/>.
+        /// </summary>
+        private static double[][] CombinedCoolingCapacities_kW()
+        {
+            return
+            [
+                //29 degC external
+                [0.88, 1.03, 1.17, 1.29, 1.40, 1.49, 1.57, 1.62],
+                [0.82, 0.98, 1.12, 1.24, 1.34, 1.43, 1.49, 1.53],
+                [0.80, 0.95, 1.07, 1.18, 1.27, 1.34, 1.39, 1.43],
+                [0.78, 0.91, 1.02, 1.11, 1.19, 1.25, 1.30, 1.33],
+
+                //32 degC external
+                [1.03, 1.21, 1.37, 1.51, 1.63, 1.73, 1.82, 1.88],
+                [0.98, 1.14, 1.29, 1.42, 1.54, 1.65, 1.74, 1.82],
+                [0.93, 1.09, 1.24, 1.37, 1.49, 1.60, 1.69, 1.77],
+                [0.88, 1.04, 1.19, 1.32, 1.44, 1.55, 1.64, 1.72],
+
+                //34 degC external
+                [1.13, 1.31, 1.49, 1.65, 1.80, 1.94, 2.08, 2.20],
+                [1.11, 1.27, 1.43, 1.59, 1.73, 1.87, 2.00, 2.12],
+                [1.04, 1.21, 1.37, 1.52, 1.65, 1.77, 1.89, 1.99],
+                [0.97, 1.15, 1.31, 1.45, 1.57, 1.68, 1.77, 1.85],
+            ];
+        }
+
+        /// <summary>
+        /// Writes a small catalogue into a temporary directory, either sound (<c>Resolved</c>) or with one
+        /// named defect in it. Hand-written JSON rather than a serialized object, because what is under
+        /// test is how the reader treats a file somebody edited.
+        /// </summary>
+        private static string TemporaryCatalogue(string defect)
+        {
+            string directory = Path.Combine(Path.GetTempPath(), "SAM_VentilationUnitCatalogue_" + Guid.NewGuid().ToString("N"));
+
+            Directory.CreateDirectory(directory);
+
+            string entry_60 = Entry("FIXTURE-60", "60", "60");
+            string entry_90 = Entry("FIXTURE-90", "90", "90");
+
+            string entries;
+
+            switch (defect)
+            {
+                case "Resolved":
+                    entries = entry_60 + "," + entry_90;
+                    break;
+
+                case "Source":
+                    entries = entry_60 + "," + Entry("FIXTURE-90", "90", "90", source: null);
+                    break;
+
+                case "RaggedGrid":
+                    //Seven values where the axes say eight - a grid that would answer every query with
+                    //numbers attributed to the wrong conditions.
+                    entries = entry_60 + "," + Entry("FIXTURE-90", "90", "90", values: "[1,2,3,4,5,6,7]");
+                    break;
+
+                case "DuplicateIdentity":
+                    entries = entry_60 + "," + Entry("FIXTURE-60", "90", "90");
+                    break;
+
+                case "UnusableCapacity":
+                    entries = entry_60 + "," + Entry("FIXTURE-90", "\"ninety\"", "90");
+                    break;
+
+                case "MissingRank":
+                    //A missing rank is a unique 0, 0 sorts first, and the unranked entry becomes the preferred
+                    //answer between two products of the same size. Declared or refused.
+                    entries = entry_60 + "," + Entry("FIXTURE-90", "90", "90", rank: null);
+                    break;
+
+                case "BrokenControlPolicy":
+                    //A mistyped policy name. Silently reading it as the permissive default is the one
+                    //direction a typo must never take.
+                    entries = entry_60 + "," + Entry("FIXTURE-90", "90", "90", policy: "Refuze");
+                    break;
+
+                default:
+                    entries = entry_60 + ",\"not an object\"";
+                    break;
+            }
+
+            File.WriteAllText(
+                Path.Combine(directory, Query.VentilationUnitCatalogueFileName),
+                "{ \"Schema\": \"VentilationUnitCatalogue:v1\", \"Templates\": [" + entries + "] }");
+
+            return directory;
+        }
+
+        private static string Entry(string model, string maximumSupply, string maximumExtract, string source = "Test Fixture", string values = "[1,2,3,4,5,6,7,8]", string policy = "ClampToDomain", string rank = "0")
+        {
+            string sourceJson = source == null ? string.Empty : "\"Source\": \"" + source + "\",";
+            string rankJson = rank == null ? string.Empty : "\"Rank\": " + rank + ",";
+
+            return
+                "{ \"_type\": \"SAM.Analytical.VentilationUnitTemplate,SAM.Analytical\"," +
+                "\"VentilationUnitReference\": { \"_type\": \"SAM.Analytical.VentilationUnitReference,SAM.Analytical\", \"Manufacturer\": \"Test Fixture\", \"Model\": \"" + model + "\" }," +
+                sourceJson +
+                "\"MaximumSupplyFlowRate_Lps\": " + maximumSupply + "," +
+                "\"MaximumExtractFlowRate_Lps\": " + maximumExtract + "," +
+                rankJson +
+                "\"PerformanceTable\": { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceTable,SAM.Analytical\"," +
+                "\"Axes\": [ { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceAxis,SAM.Analytical\", \"Name\": \"AirFlowRate\", \"Unit\": \"l/s\", \"Values\": [50,60,70,80,90,100,110,120] } ]," +
+                "\"Outputs\": [ { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceOutput,SAM.Analytical\", \"Name\": \"SupplyAirTemperature\", \"Unit\": \"degC\", \"Values\": " + values + " } ] }," +
+                "\"FlowFractionByControlTemperature\": { \"_type\": \"SAM.Analytical.FlowFractionControlCurve,SAM.Analytical\"," +
+                "\"PerformanceTable\": { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceTable,SAM.Analytical\"," +
+                "\"Axes\": [ { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceAxis,SAM.Analytical\", \"Name\": \"ControlTemperature\", \"Unit\": \"degC\", \"Values\": [22,26] } ]," +
+                "\"Outputs\": [ { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceOutput,SAM.Analytical\", \"Name\": \"FlowFraction\", \"Unit\": \"-\", \"Values\": [0.3,1.0] } ] }," +
+                "\"PerformanceDomainPolicy\": \"" + policy + "\" } }";
+        }
+
+        /// <summary>
+        /// This repository's own resources directory, so the tests check what is <b>shipped</b> rather than
+        /// what happened to be copied into a test output. The same walk
+        /// <see cref="SystemEnergyCentreCapabilityTests"/> uses.
+        /// </summary>
+        private static string Directory_Resources()
+        {
+            DirectoryInfo directoryInfo = new(AppContext.BaseDirectory);
+
+            while (directoryInfo != null)
+            {
+                string result = Path.Combine(directoryInfo.FullName, "files", "resources", "Analytical", "Systems", "VentilationUnit");
+
+                if (Directory.Exists(result) && Directory.Exists(Path.Combine(directoryInfo.FullName, "SAM_Systems", "SAM.Analytical.Systems")))
+                {
+                    return result;
+                }
+
+                directoryInfo = directoryInfo.Parent;
+            }
+
+            throw new DirectoryNotFoundException("The SAM_Systems repository root was not found above " + AppContext.BaseDirectory);
+        }
+    }
+}

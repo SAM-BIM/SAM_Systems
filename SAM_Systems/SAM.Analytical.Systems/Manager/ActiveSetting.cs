@@ -47,6 +47,7 @@ namespace SAM.Analytical.Systems
             result.SetValue(AnalyticalSystemSettingParameter.DefaultDisplaySystemManagerFileName, "SAM_DisplaySystemManager.JSON");
             result.SetValue(AnalyticalSystemSettingParameter.DefaultDisplaySystemManagerFileName, "SAM_DisplaySystemManager.JSON");
             result.SetValue(AnalyticalSystemSettingParameter.DefaultSystemEnergyCentreDirectoryName, "SystemEnergyCentre");
+            result.SetValue(AnalyticalSystemSettingParameter.DefaultVentilationUnitDirectoryName, "VentilationUnit");
 
             string path = null;
 
@@ -62,6 +63,12 @@ namespace SAM.Analytical.Systems
             if (System.IO.Directory.Exists(directory))
             {
                 result.SetValue(AnalyticalSystemSettingParameter.DefaultSystemEnergyCentreFileDirectory, directory);
+            }
+
+            directory = Query.DefaultPath(result, AnalyticalSystemSettingParameter.DefaultVentilationUnitDirectoryName);
+            if (System.IO.Directory.Exists(directory))
+            {
+                result.SetValue(AnalyticalSystemSettingParameter.DefaultVentilationUnitFileDirectory, directory);
             }
 
 

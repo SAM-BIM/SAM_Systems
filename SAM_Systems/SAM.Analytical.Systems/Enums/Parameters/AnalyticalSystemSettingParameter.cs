@@ -15,5 +15,9 @@ namespace SAM.Analytical.Systems
         [ParameterProperties("Default SystemEnergyCentre File Directory", "Default SystemEnergyCentre File Directory"), ParameterValue(ParameterType.String)] DefaultSystemEnergyCentreFileDirectory,
 
         [ParameterProperties("Default SystemEnergyCentre Directory Name", "Default SystemEnergyCentre Directory Name"), ParameterValue(ParameterType.String)] DefaultSystemEnergyCentreDirectoryName,
+
+        [ParameterProperties("Default VentilationUnit File Directory", "Default VentilationUnit File Directory"), ParameterValue(ParameterType.String)] DefaultVentilationUnitFileDirectory,
+
+        [ParameterProperties("Default VentilationUnit Directory Name", "Default VentilationUnit Directory Name"), ParameterValue(ParameterType.String)] DefaultVentilationUnitDirectoryName,
     }
 }
