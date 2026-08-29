@@ -2,6 +2,7 @@
 // Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using SAM.Analytical.Enums;
+using SAM.Core;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -536,6 +537,109 @@ namespace SAM.Analytical.Systems.Tests
             {
                 Directory.Delete(directory, true);
             }
+        }
+
+        // =================================================================================================
+        // I. The upgrade path - a Setting persisted before these two parameters existed
+        // =================================================================================================
+
+        /// <summary>
+        /// <b>The Codex P1: a legacy persisted Setting must still resolve the shipped catalogue.</b>
+        /// <para>
+        /// <c>ActiveSetting.Load()</c> can hand back a <c>Setting</c> that was persisted before
+        /// <c>DefaultVentilationUnitFileDirectory</c>/<c>DefaultVentilationUnitDirectoryName</c> existed, as-is -
+        /// it is not merged with <see cref="ActiveSetting.GetDefault"/>. Both values then read back
+        /// null, and <see cref="Query.DefaultVentilationUnitDirectory(Setting)"/> used to fall back straight to
+        /// the resources root itself rather than that root's <c>VentilationUnit</c> child, one directory too
+        /// high for <see cref="Query.VentilationUnitCatalogueFileName"/> to be found in after an upgrade.
+        /// </para>
+        /// <para>
+        /// A <see cref="Setting"/> parameter is injected here rather than exercised through the process-wide
+        /// <see cref="ActiveSetting.Setting"/>, so this test cannot leak state into any other test that reads
+        /// it.
+        /// </para>
+        /// </summary>
+        [Fact]
+        public void ALegacyPersistedSetting_StillResolvesTheShippedCatalogue()
+        {
+            //Exactly the shape ActiveSetting.Load() hands back for a Setting persisted before either
+            //ventilation-unit parameter existed: present, but with neither value.
+            Setting setting_Legacy = new Setting();
+
+            //This repository's own resources root injected explicitly - see the resourcesDirectory
+            //parameter's remarks: Query.ResourcesDirectory() falls back to a real per-user SAM install
+            //directory when one happens to exist on the machine running the test, which this test must not
+            //depend on to be deterministic.
+            string directory = Query.DefaultVentilationUnitDirectory(setting_Legacy, ResourcesRoot());
+
+            Assert.Equal(Directory_Resources(), directory);
+
+            //And the real shipped catalogue is reachable through it - the upgrade path, proven end to end.
+            Assert.NotNull(Query.VentilationUnitCatalogue(directory));
+            Assert.NotEmpty(Query.VentilationUnitTemplates(directory));
+        }
+
+        /// <summary>
+        /// A fresh, never-persisted default Setting resolves a directory holding the real shipped catalogue.
+        /// <para>
+        /// Exercised through the REAL <see cref="ActiveSetting.GetDefault"/> and the REAL, unparameterised
+        /// <see cref="Query.DefaultVentilationUnitDirectory(Setting, string)"/> resolution - unlike the other
+        /// tests in this section, deliberately not pinned to <see cref="Directory_Resources"/> by exact path,
+        /// because <c>GetDefault</c> itself resolves <c>DefaultVentilationUnitFileDirectory</c> against
+        /// whatever real per-user SAM install <see cref="Core.Query.ResourcesDirectory()"/> finds, which can
+        /// be a real installed copy of the same shipped catalogue rather than this checkout's own copy. What
+        /// has to be true everywhere is that a fresh Setting resolves to SOME directory holding a usable
+        /// catalogue - not to any one specific path.
+        /// </para>
+        /// </summary>
+        [Fact]
+        public void AFreshDefaultSetting_ResolvesTheShippedCatalogueDirectory()
+        {
+            string directory = Query.DefaultVentilationUnitDirectory(ActiveSetting.GetDefault());
+
+            Assert.NotNull(directory);
+            Assert.NotNull(Query.VentilationUnitCatalogue(directory));
+            Assert.NotEmpty(Query.VentilationUnitTemplates(directory));
+        }
+
+        /// <summary>
+        /// An explicit <c>DefaultVentilationUnitFileDirectory</c> wins outright, whatever the leaf name
+        /// says or does not say.
+        /// </summary>
+        [Fact]
+        public void AnExplicitVentilationUnitDirectory_IsUsedDirectly()
+        {
+            Setting setting = new Setting();
+            setting.SetValue(AnalyticalSystemSettingParameter.DefaultVentilationUnitFileDirectory, Directory_Resources());
+
+            Assert.Equal(Directory_Resources(), Query.DefaultVentilationUnitDirectory(setting));
+        }
+
+        /// <summary>
+        /// An explicit custom leaf name - declared, just not "VentilationUnit" - is combined with the
+        /// resources root rather than falling back to <see cref="ActiveSetting.GetDefault"/>'s leaf.
+        /// </summary>
+        [Fact]
+        public void AnExplicitCustomDirectoryName_IsCombinedWithTheResourcesRoot()
+        {
+            Setting setting = new Setting();
+            setting.SetValue(AnalyticalSystemSettingParameter.DefaultVentilationUnitDirectoryName, "VentilationUnit");
+
+            //Same leaf as the default, so it round-trips to the same real directory - proving the explicit
+            //name was actually read, not merely ignored in favour of the fallback that happens to agree.
+            Assert.Equal(Directory_Resources(), Query.DefaultVentilationUnitDirectory(setting, ResourcesRoot()));
+
+            //A leaf that does not exist on disk refuses rather than silently substituting anything else.
+            Setting setting_Missing = new Setting();
+            setting_Missing.SetValue(AnalyticalSystemSettingParameter.DefaultVentilationUnitDirectoryName, "NoSuchLeaf");
+
+            Assert.Null(Query.DefaultVentilationUnitDirectory(setting_Missing, ResourcesRoot()));
+        }
+
+        /// <summary>This repository's resources root - the parent <see cref="Directory_Resources"/>'s <c>VentilationUnit</c> leaf sits under.</summary>
+        private static string ResourcesRoot()
+        {
+            return Path.GetDirectoryName(Directory_Resources());
         }
 
         // =================================================================================================

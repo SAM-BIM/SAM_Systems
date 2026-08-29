@@ -60,6 +60,53 @@ Modified (appended to only):
 | `SAM_Systems/SAM.Analytical.Systems/Enums/Parameters/AnalyticalSystemSettingParameter.cs` | `DefaultVentilationUnitFileDirectory`, `DefaultVentilationUnitDirectoryName` - appended, so no ordinal moved |
 | `SAM_Systems/SAM.Analytical.Systems/Manager/ActiveSetting.cs` | defaults the directory name to `VentilationUnit` and resolves it, mirroring `SystemEnergyCentre` |
 
+## Codex review round (2026-08-29) - PR #15, one P1 finding, fixed
+
+Codex reviewed PR #15 (`29059626`) and posted one P1 finding, a real upgrade blocker: an existing
+installation's persisted `SAM.Analytical.Systems` `Setting`, saved before `DefaultVentilationUnitFileDirectory`
+/ `DefaultVentilationUnitDirectoryName` existed, is returned by `ActiveSetting.Load()` as-is - it is never
+merged with `ActiveSetting.GetDefault()`. Both ventilation-unit values then read back null, and
+`Query.DefaultVentilationUnitDirectory()` fell back straight to the resources root itself rather than that
+root's `VentilationUnit` child - one directory too high for `VentilationUnitCatalogue.JSON` to be found in,
+so `VentilationUnitTemplates()`/`VentilationUnitCapacityDescriptors()` would return `null` for any
+installation upgrading straight from before this feature, even though the catalogue file itself deployed
+correctly.
+
+**Fixed** in `Query.DefaultVentilationUnitDirectory` (`VentilationUnitTemplates.cs`): when the setting's own
+`DefaultVentilationUnitDirectoryName` is absent, it now falls back to the **same** default leaf
+`ActiveSetting.GetDefault()` declares, read from that method rather than a second hard-coded
+`"VentilationUnit"` literal - so the leaf name is declared in exactly one place. `ActiveSetting.Load()`
+itself is untouched, per the review's own scope guidance: the fix is a local fallback in the one place that
+needed the invariant, not a settings-migration rewrite.
+
+The method also gained two optional parameters, `Setting setting = null` and `string resourcesDirectory =
+null` (both default to the previous, unparameterised behaviour - every existing call site is unaffected).
+They exist purely so a test can hand in a specific persisted-setting shape and a specific resources root
+without mutating the process-wide `ActiveSetting.Setting` or depending on whatever real per-user SAM install
+`Core.Query.ResourcesDirectory()` happens to find on the machine running the test - which, it turns out, no
+existing test in this file did: `TheCatalogue_SitsWhereTheRuntimeResolverWillLookForIt` re-derives the
+expected path and checks `File.Exists` on it directly, but never actually calls
+`Query.DefaultVentilationUnitDirectory()` end to end. That gap is why this bug shipped unnoticed.
+
+Test: `VentilationUnitCatalogueTests` section I -
+`ALegacyPersistedSetting_StillResolvesTheShippedCatalogue` (a `new Setting()` with neither parameter set -
+exactly `ActiveSetting.Load()`'s legacy shape - resolves to this repository's real shipped catalogue
+directory and reads the real catalogue through it, proving the upgrade path end to end),
+`AFreshDefaultSetting_ResolvesTheShippedCatalogueDirectory`, `AnExplicitVentilationUnitDirectory_IsUsedDirectly`,
+`AnExplicitCustomDirectoryName_IsCombinedWithTheResourcesRoot` (including the leaf-not-found refusal case).
+
+### Validation
+
+| Suite | Result |
+|---|---|
+| `VentilationUnitCatalogueTests` (focused, incl. 4 new) | **34 / 34** |
+| `SAM.Analytical.Systems.Tests` (full) | **74 / 74** |
+| `SAM.Analytical.Systems.Mollier.Tests` | **123 / 123** |
+
+CI against `sow/2026-Q3` may still fail until `SAM-BIM/SAM` #80 merges - **expected**, per the declared
+dependency; not worked around here. New commit on top of `29059626` on
+`feature/parto-iteration2-ventilation-unit-catalogue`. Not merged.
+
 ## Decisions / assumptions
 
 1. **Each catalogue entry is a serialised `VentilationUnitTemplate`**, so the type's own tolerant

@@ -181,9 +181,24 @@ namespace SAM.Analytical.Systems
         /// The same resolution <see cref="DefaultSystemEnergyCentreDirectory"/> performs, against its own
         /// setting.
         /// </summary>
-        public static string DefaultVentilationUnitDirectory()
+        /// <param name="setting">
+        /// The setting to resolve against. Null uses <see cref="ActiveSetting.Setting"/> - the parameter
+        /// exists so a test can hand in a specific persisted-setting shape (fresh, legacy, custom) without
+        /// mutating the process-wide active setting.
+        /// </param>
+        /// <param name="resourcesDirectory">
+        /// The resources root to resolve the leaf against. Null uses <see cref="ResourcesDirectory"/> - the
+        /// parameter exists for the same reason <paramref name="setting"/> does: <see cref="ResourcesDirectory"/>
+        /// itself falls back to a real per-user install location
+        /// (<see cref="Core.Query.UserSAMDirectory"/>) when one happens to exist on the machine, which a test
+        /// must not depend on.
+        /// </param>
+        public static string DefaultVentilationUnitDirectory(Setting setting = null, string resourcesDirectory = null)
         {
-            Setting setting = ActiveSetting.Setting;
+            if (setting == null)
+            {
+                setting = ActiveSetting.Setting;
+            }
 
             string directory = setting?.GetValue<string>(AnalyticalSystemSettingParameter.DefaultVentilationUnitFileDirectory);
             if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory))
@@ -191,13 +206,26 @@ namespace SAM.Analytical.Systems
                 return directory;
             }
 
-            string resourcesDirectory = ResourcesDirectory();
+            if (string.IsNullOrWhiteSpace(resourcesDirectory))
+            {
+                resourcesDirectory = ResourcesDirectory();
+            }
+
             if (string.IsNullOrWhiteSpace(resourcesDirectory))
             {
                 return null;
             }
 
             string name = setting?.GetValue<string>(AnalyticalSystemSettingParameter.DefaultVentilationUnitDirectoryName);
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                //A Setting persisted before this parameter existed - loaded as-is by ActiveSetting.Load(),
+                //not merged with GetDefault() - carries neither value. Fall back to the SAME default leaf
+                //GetDefault() defines, rather than the resources root itself: the two must not name the
+                //leaf independently, or a change to one silently strands installations relying on the other.
+                name = ActiveSetting.GetDefault().GetValue<string>(AnalyticalSystemSettingParameter.DefaultVentilationUnitDirectoryName);
+            }
+
             directory = string.IsNullOrWhiteSpace(name) ? resourcesDirectory : Path.Combine(resourcesDirectory, name);
 
             return Directory.Exists(directory) ? directory : null;
