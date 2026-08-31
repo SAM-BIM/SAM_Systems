@@ -392,6 +392,11 @@ namespace SAM.Analytical.Systems.Tests
         [InlineData("BrokenControlPolicy")]
         [InlineData("MissingRank")]
         [InlineData("NotAnObject")]
+        [InlineData("NullPerformanceTable")]
+        [InlineData("NullFlowFractionByControlTemperature")]
+        [InlineData("MissingSchema")]
+        [InlineData("WrongSchema")]
+        [InlineData("FutureSchema")]
         public void ABrokenEntry_RefusesTheWholeCatalogue(string defect)
         {
             string directory = TemporaryCatalogue(defect);
@@ -400,6 +405,52 @@ namespace SAM.Analytical.Systems.Tests
             {
                 Assert.Null(Query.VentilationUnitTemplates(directory));
                 Assert.Null(Query.VentilationUnitCapacityDescriptors(directory));
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        /// <summary>The exact schema tag the reader requires, checked against the constant it enforces - and a v1 catalogue is read end to end under it.</summary>
+        [Fact]
+        public void TheExactV1Schema_IsAccepted()
+        {
+            Assert.Equal("VentilationUnitCatalogue:v1", Query.VentilationUnitCatalogueSchema);
+
+            string directory = TemporaryCatalogue("Resolved");
+
+            try
+            {
+                Assert.NotNull(Query.VentilationUnitTemplates(directory));
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        /// <summary>
+        /// <b>Preserves the distinction the present-but-null fix must not erase.</b> A product legitimately
+        /// catalogued without performance data or a control curve - both keys simply absent, not present and
+        /// null - is still accepted; only a key that is PRESENT but null or unusable refuses the catalogue.
+        /// </summary>
+        [Fact]
+        public void AnEntryWithBothOptionalObjectsAbsent_IsStillAccepted()
+        {
+            string directory = TemporaryCatalogueWithAbsentOptionalData();
+
+            try
+            {
+                List<VentilationUnitTemplate> ventilationUnitTemplates = Query.VentilationUnitTemplates(directory);
+
+                Assert.NotNull(ventilationUnitTemplates);
+
+                VentilationUnitTemplate ventilationUnitTemplate = Assert.Single(ventilationUnitTemplates);
+
+                Assert.True(ventilationUnitTemplate.IsValid);
+                Assert.Null(ventilationUnitTemplate.PerformanceTable);
+                Assert.Null(ventilationUnitTemplate.FlowFractionByControlTemperature);
             }
             finally
             {
@@ -731,6 +782,7 @@ namespace SAM.Analytical.Systems.Tests
             string entry_90 = Entry("FIXTURE-90", "90", "90");
 
             string entries;
+            string schema = "VentilationUnitCatalogue:v1";
 
             switch (defect)
             {
@@ -768,38 +820,122 @@ namespace SAM.Analytical.Systems.Tests
                     entries = entry_60 + "," + Entry("FIXTURE-90", "90", "90", policy: "Refuze");
                     break;
 
+                case "NullPerformanceTable":
+                    //PRESENT but null - malformed data, not the documented "no performance data" absence.
+                    entries = entry_60 + "," + Entry("FIXTURE-90", "90", "90", performanceTableNull: true);
+                    break;
+
+                case "NullFlowFractionByControlTemperature":
+                    //Same distinction, on the control curve.
+                    entries = entry_60 + "," + Entry("FIXTURE-90", "90", "90", flowFractionNull: true);
+                    break;
+
+                case "MissingSchema":
+                    entries = entry_60 + "," + entry_90;
+                    schema = null;
+                    break;
+
+                case "WrongSchema":
+                    entries = entry_60 + "," + entry_90;
+                    schema = "NotACatalogue";
+                    break;
+
+                case "FutureSchema":
+                    //Plausible-looking, not this reader's version - must not be quietly parsed as v1.
+                    entries = entry_60 + "," + entry_90;
+                    schema = "VentilationUnitCatalogue:v2";
+                    break;
+
                 default:
                     entries = entry_60 + ",\"not an object\"";
                     break;
             }
 
+            string schemaJson = schema == null ? string.Empty : "\"Schema\": \"" + schema + "\", ";
+
             File.WriteAllText(
                 Path.Combine(directory, Query.VentilationUnitCatalogueFileName),
-                "{ \"Schema\": \"VentilationUnitCatalogue:v1\", \"Templates\": [" + entries + "] }");
+                "{ " + schemaJson + "\"Templates\": [" + entries + "] }");
 
             return directory;
         }
 
-        private static string Entry(string model, string maximumSupply, string maximumExtract, string source = "Test Fixture", string values = "[1,2,3,4,5,6,7,8]", string policy = "ClampToDomain", string rank = "0")
+        /// <summary>A one-entry catalogue whose PerformanceTable and FlowFractionByControlTemperature keys are both simply absent - the legal "no performance data" state, contrasted with the present-but-null cases above.</summary>
+        private static string TemporaryCatalogueWithAbsentOptionalData()
         {
-            string sourceJson = source == null ? string.Empty : "\"Source\": \"" + source + "\",";
-            string rankJson = rank == null ? string.Empty : "\"Rank\": " + rank + ",";
+            string directory = Path.Combine(Path.GetTempPath(), "SAM_VentilationUnitCatalogue_" + Guid.NewGuid().ToString("N"));
 
-            return
-                "{ \"_type\": \"SAM.Analytical.VentilationUnitTemplate,SAM.Analytical\"," +
-                "\"VentilationUnitReference\": { \"_type\": \"SAM.Analytical.VentilationUnitReference,SAM.Analytical\", \"Manufacturer\": \"Test Fixture\", \"Model\": \"" + model + "\" }," +
-                sourceJson +
-                "\"MaximumSupplyFlowRate_Lps\": " + maximumSupply + "," +
-                "\"MaximumExtractFlowRate_Lps\": " + maximumExtract + "," +
-                rankJson +
-                "\"PerformanceTable\": { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceTable,SAM.Analytical\"," +
-                "\"Axes\": [ { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceAxis,SAM.Analytical\", \"Name\": \"AirFlowRate\", \"Unit\": \"l/s\", \"Values\": [50,60,70,80,90,100,110,120] } ]," +
-                "\"Outputs\": [ { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceOutput,SAM.Analytical\", \"Name\": \"SupplyAirTemperature\", \"Unit\": \"degC\", \"Values\": " + values + " } ] }," +
-                "\"FlowFractionByControlTemperature\": { \"_type\": \"SAM.Analytical.FlowFractionControlCurve,SAM.Analytical\"," +
-                "\"PerformanceTable\": { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceTable,SAM.Analytical\"," +
-                "\"Axes\": [ { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceAxis,SAM.Analytical\", \"Name\": \"ControlTemperature\", \"Unit\": \"degC\", \"Values\": [22,26] } ]," +
-                "\"Outputs\": [ { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceOutput,SAM.Analytical\", \"Name\": \"FlowFraction\", \"Unit\": \"-\", \"Values\": [0.3,1.0] } ] }," +
-                "\"PerformanceDomainPolicy\": \"" + policy + "\" } }";
+            Directory.CreateDirectory(directory);
+
+            string entry = Entry("FIXTURE-60", "60", "60", performanceTableAbsent: true, flowFractionAbsent: true);
+
+            File.WriteAllText(
+                Path.Combine(directory, Query.VentilationUnitCatalogueFileName),
+                "{ \"Schema\": \"VentilationUnitCatalogue:v1\", \"Templates\": [" + entry + "] }");
+
+            return directory;
+        }
+
+        private static string Entry(
+            string model,
+            string maximumSupply,
+            string maximumExtract,
+            string source = "Test Fixture",
+            string values = "[1,2,3,4,5,6,7,8]",
+            string policy = "ClampToDomain",
+            string rank = "0",
+            bool performanceTableNull = false,
+            bool performanceTableAbsent = false,
+            bool flowFractionNull = false,
+            bool flowFractionAbsent = false)
+        {
+            List<string> fields =
+            [
+                "\"_type\": \"SAM.Analytical.VentilationUnitTemplate,SAM.Analytical\"",
+                "\"VentilationUnitReference\": { \"_type\": \"SAM.Analytical.VentilationUnitReference,SAM.Analytical\", \"Manufacturer\": \"Test Fixture\", \"Model\": \"" + model + "\" }",
+                "\"MaximumSupplyFlowRate_Lps\": " + maximumSupply,
+                "\"MaximumExtractFlowRate_Lps\": " + maximumExtract,
+            ];
+
+            if (source != null)
+            {
+                fields.Add("\"Source\": \"" + source + "\"");
+            }
+
+            if (rank != null)
+            {
+                fields.Add("\"Rank\": " + rank);
+            }
+
+            if (performanceTableNull)
+            {
+                //PRESENT but null.
+                fields.Add("\"PerformanceTable\": null");
+            }
+            else if (!performanceTableAbsent)
+            {
+                fields.Add(
+                    "\"PerformanceTable\": { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceTable,SAM.Analytical\"," +
+                    "\"Axes\": [ { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceAxis,SAM.Analytical\", \"Name\": \"AirFlowRate\", \"Unit\": \"l/s\", \"Values\": [50,60,70,80,90,100,110,120] } ]," +
+                    "\"Outputs\": [ { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceOutput,SAM.Analytical\", \"Name\": \"SupplyAirTemperature\", \"Unit\": \"degC\", \"Values\": " + values + " } ] }");
+            }
+
+            if (flowFractionNull)
+            {
+                //PRESENT but null.
+                fields.Add("\"FlowFractionByControlTemperature\": null");
+            }
+            else if (!flowFractionAbsent)
+            {
+                fields.Add(
+                    "\"FlowFractionByControlTemperature\": { \"_type\": \"SAM.Analytical.FlowFractionControlCurve,SAM.Analytical\"," +
+                    "\"PerformanceTable\": { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceTable,SAM.Analytical\"," +
+                    "\"Axes\": [ { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceAxis,SAM.Analytical\", \"Name\": \"ControlTemperature\", \"Unit\": \"degC\", \"Values\": [22,26] } ]," +
+                    "\"Outputs\": [ { \"_type\": \"SAM.Analytical.VentilationUnitPerformanceOutput,SAM.Analytical\", \"Name\": \"FlowFraction\", \"Unit\": \"-\", \"Values\": [0.3,1.0] } ] }," +
+                    "\"PerformanceDomainPolicy\": \"" + policy + "\" }");
+            }
+
+            return "{ " + string.Join(",", fields) + " }";
         }
 
         /// <summary>

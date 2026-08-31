@@ -5,6 +5,7 @@ using SAM.Core;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace SAM.Analytical.Systems
@@ -13,6 +14,18 @@ namespace SAM.Analytical.Systems
     {
         /// <summary>The manufacturer ventilation unit catalogue shipped with this repository.</summary>
         public const string VentilationUnitCatalogueFileName = "VentilationUnitCatalogue.JSON";
+
+        /// <summary>
+        /// The exact schema tag every ventilation unit catalogue this reader accepts must declare.
+        /// <para>
+        /// Versioned rather than assumed: a future reshaping of the catalogue - a field renamed, a shape
+        /// changed - has to be a new tag, and this reader has to be taught that tag before it reads a file
+        /// carrying it. An unrecognised tag is refused, never quietly parsed as if it were this version -
+        /// that is exactly the mistake that would let a genuinely different file be read as though it agreed
+        /// with code that was never updated for it.
+        /// </para>
+        /// </summary>
+        public const string VentilationUnitCatalogueSchema = "VentilationUnitCatalogue:v1";
 
         /// <summary>
         /// The manufacturer ventilation unit products this repository ships - what each one is, where its
@@ -55,6 +68,15 @@ namespace SAM.Analytical.Systems
                 return null;
             }
 
+            //Checked before anything else is read. Missing, the wrong JSON shape, or a value that is not
+            //EXACTLY VentilationUnitCatalogueSchema all refuse here - an unrecognised schema, future or
+            //otherwise, is never interpreted as this version.
+            JsonNode jsonNode_Schema = jsonObject["Schema"];
+            if (jsonNode_Schema == null || jsonNode_Schema.GetValueKind() != JsonValueKind.String || !string.Equals(jsonNode_Schema.GetValue<string>(), VentilationUnitCatalogueSchema, StringComparison.Ordinal))
+            {
+                return null;
+            }
+
             if (!(jsonObject["Templates"] is JsonArray jsonArray))
             {
                 return null;
@@ -82,12 +104,19 @@ namespace SAM.Analytical.Systems
                 //allowed is data that is PRESENT and unusable: a grid whose values no longer line up with its
                 //axes still answers every query, with numbers attributed to the wrong conditions. It has to
                 //refuse here, because nothing downstream can tell the difference.
-                if (ventilationUnitTemplate.PerformanceTable != null && !ventilationUnitTemplate.PerformanceTable.IsValid)
+                //
+                //Checked against the raw JSON key, not the parsed template - "PerformanceTable": null and a
+                //genuinely absent key both parse to a null PerformanceTable, and only the raw key can tell
+                //them apart. An absent key is the documented "no performance data" state; a key that is
+                //PRESENT but null, or present and not an object VentilationUnitPerformanceTable could parse
+                //at all, is malformed data and must refuse the catalogue exactly as an unusable-but-parsed
+                //table does, not be silently read as "optional data absent".
+                if (jsonObject_Template.ContainsKey("PerformanceTable") && (ventilationUnitTemplate.PerformanceTable == null || !ventilationUnitTemplate.PerformanceTable.IsValid))
                 {
                     return null;
                 }
 
-                if (ventilationUnitTemplate.FlowFractionByControlTemperature != null && !ventilationUnitTemplate.FlowFractionByControlTemperature.IsValid)
+                if (jsonObject_Template.ContainsKey("FlowFractionByControlTemperature") && (ventilationUnitTemplate.FlowFractionByControlTemperature == null || !ventilationUnitTemplate.FlowFractionByControlTemperature.IsValid))
                 {
                     return null;
                 }
