@@ -694,6 +694,106 @@ namespace SAM.Analytical.Systems.Tests
         }
 
         // =================================================================================================
+        // J. The Grasshopper catalogue component's exact combination - SAMAnalyticalSystemVentilationUnitCatalogue
+        //    reads VentilationUnitTemplates once and derives both its outputs from that same list, exactly
+        //    as these tests do. Not a retest of B/C/H above - a check that what the component hands to
+        //    Grasshopper is self-consistent, and that the two required engineering behaviours hold.
+        // =================================================================================================
+
+        /// <summary>
+        /// <b>Required behaviour, Case 1: the real Nuaire product must be visible, and must not be
+        /// selectable.</b> The catalogue read succeeds - this is not "catalogue missing" - it reports
+        /// exactly the Nuaire product as unselectable with a reason, and the selectable list is empty. An
+        /// empty selectable list here must not read as a failed load.
+        /// </summary>
+        [Fact]
+        public void ShippedCatalogue_NuaireIsVisibleAndUnselectable_SelectableListIsEmptyNotMissing()
+        {
+            List<VentilationUnitTemplate> ventilationUnitTemplates = Query.VentilationUnitTemplates(Directory_Resources());
+
+            //The read itself succeeded - the fact that distinguishes "empty because nothing is selectable
+            //yet" from "empty because the catalogue could not be read", which is exactly the distinction
+            //SAMAnalyticalSystemVentilationUnitCatalogue reports through separate runtime messages.
+            Assert.NotNull(ventilationUnitTemplates);
+
+            List<VentilationUnitCapacityDescriptor> ventilationUnitCapacityDescriptors = Analytical.Query.CapacityDescriptors(ventilationUnitTemplates);
+            List<KeyValuePair<VentilationUnitTemplate, string>> unselectable = Analytical.Query.UnselectableVentilationUnitTemplates(ventilationUnitTemplates);
+
+            Assert.Empty(ventilationUnitCapacityDescriptors);
+
+            KeyValuePair<VentilationUnitTemplate, string> nuaire = Assert.Single(unselectable);
+            Assert.Equal(model_Nuaire, nuaire.Key.VentilationUnitReference.Model);
+            Assert.False(string.IsNullOrWhiteSpace(nuaire.Value));
+
+            //Selectable and unselectable together account for every template read - nothing silently
+            //vanishes between the two outputs the component hands to Grasshopper.
+            Assert.Equal(ventilationUnitTemplates.Count, ventilationUnitCapacityDescriptors.Count + unselectable.Count);
+        }
+
+        /// <summary>
+        /// <b>Required behaviour, Case 2: a controlled fixture with two genuinely selectable products.</b>
+        /// 100/100 l/s and 150/150 l/s, read back with their capacities, rank and identity preserved - and,
+        /// run through the unchanged selection kernel against a 115/115 l/s dwelling duty, the 150 l/s
+        /// product is chosen. Not 100 (undersized on both sides), not "nearest", and 115 is never written
+        /// back anywhere as a capacity.
+        /// </summary>
+        [Fact]
+        public void ControlledFixtureCatalogue_TwoSelectableProducts_150IsChosenFor115DwellingDuty()
+        {
+            string directory = TemporaryTwoProductCatalogue();
+
+            try
+            {
+                List<VentilationUnitTemplate> ventilationUnitTemplates = Query.VentilationUnitTemplates(directory);
+
+                Assert.NotNull(ventilationUnitTemplates);
+                Assert.Equal(2, ventilationUnitTemplates.Count);
+
+                List<VentilationUnitCapacityDescriptor> ventilationUnitCapacityDescriptors = Analytical.Query.CapacityDescriptors(ventilationUnitTemplates);
+
+                Assert.Empty(Analytical.Query.UnselectableVentilationUnitTemplates(ventilationUnitTemplates));
+                Assert.Equal(2, ventilationUnitCapacityDescriptors.Count);
+
+                VentilationUnitCapacityDescriptor descriptor_A = ventilationUnitCapacityDescriptors.Find(x => x.VentilationUnitReference.Model == "FIXTURE-A-100");
+                VentilationUnitCapacityDescriptor descriptor_B = ventilationUnitCapacityDescriptors.Find(x => x.VentilationUnitReference.Model == "FIXTURE-B-150");
+
+                Assert.NotNull(descriptor_A);
+                Assert.NotNull(descriptor_B);
+                Assert.Equal(100, descriptor_A.MaximumSupplyFlowRate_Lps, 6);
+                Assert.Equal(100, descriptor_A.MaximumExtractFlowRate_Lps, 6);
+                Assert.Equal(150, descriptor_B.MaximumSupplyFlowRate_Lps, 6);
+                Assert.Equal(150, descriptor_B.MaximumExtractFlowRate_Lps, 6);
+
+                VentilationUnitSelection ventilationUnitSelection = Analytical.Query.SelectSmallestCapableVentilationUnit(ventilationUnitCapacityDescriptors, 115, 115);
+
+                Assert.True(ventilationUnitSelection.IsSelected);
+                Assert.Equal("FIXTURE-B-150", ventilationUnitSelection.VentilationUnitReference.Model);
+                Assert.Equal(115, ventilationUnitSelection.SupplyDuty_Lps, 6);
+                Assert.Equal(35, ventilationUnitSelection.SupplyHeadroom_Lps, 6);
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        /// <summary>Two products at exactly the sizes Iteration 2's required Case 2 uses: 100/100 l/s and 150/150 l/s.</summary>
+        private static string TemporaryTwoProductCatalogue()
+        {
+            string directory = Path.Combine(Path.GetTempPath(), "SAM_VentilationUnitCatalogue_" + Guid.NewGuid().ToString("N"));
+
+            Directory.CreateDirectory(directory);
+
+            string entries = Entry("FIXTURE-A-100", "100", "100") + "," + Entry("FIXTURE-B-150", "150", "150");
+
+            File.WriteAllText(
+                Path.Combine(directory, Query.VentilationUnitCatalogueFileName),
+                "{ \"Schema\": \"VentilationUnitCatalogue:v1\", \"Templates\": [" + entries + "] }");
+
+            return directory;
+        }
+
+        // =================================================================================================
         // Fixtures
         // =================================================================================================
 
