@@ -3,20 +3,22 @@
 ## Branch
 The ventilation unit catalogue feature itself is **merged**: `feature/parto-iteration2-ventilation-unit-catalogue`
 went in as PR #15 (`32fff611`), onto `SAM-BIM/SAM_Systems` `sow/2026-Q3`, after the SAM manufacturer-catalogue
-dependency below merged first.
+dependency below merged first. Its late-P2 hardening follow-up, PR #16, is also **merged** (`e444982`).
 
-Current work is a narrow **follow-up hardening branch**, `fix/parto-catalogue-late-p2-hardening`, cut from
-the current `sow/2026-Q3` (`32fff611`) - see the *Follow-up hardening* section below. Raised as **PR #16**
-against `sow/2026-Q3`. **Not merged yet.**
+Current work is **Grasshopper Seam 1**, `feature/parto-iteration2-gh-ventilation-catalogue`, cut from the
+current `sow/2026-Q3` (`e444982`) - see the *Grasshopper Seam 1* section below. Raised as a PR against
+`sow/2026-Q3`. **Not merged yet.**
 
-**Depended on `SAM-BIM/SAM`** for the ventilation unit catalogue feature (now merged, both sides). The
-current hardening branch depends only on the SAM API surface already merged into SAM's `sow/2026-Q3`
-(`5433c20f`) - it does not require SAM's own late-P2 hardening follow-up (SAM PR #82) to merge first, and
-was built and tested against SAM's `sow/2026-Q3` specifically to confirm that independence.
+**Companion branch in `SAM-BIM/SAM`**: `feature/parto-iteration2-gh-equipment-selection`, off SAM's
+`sow/2026-Q3` at `45429237`. Deliberately not a code dependency in either direction - `SAM.Analytical`
+still does not reference `SAM.Analytical.Systems` - the two components are wired together only on a
+Grasshopper canvas, and either PR can merge independently of the other.
 
 ## Last updated
-2026-08-31 - late Codex P2 hardening follow-up (PR #16): catalogue schema enforcement and the
-present-but-null vs. absent optional-data distinction.
+2026-08-31 (Grasshopper Seam 1) - a new SAM_Systems Grasshopper component exposes the existing catalogue
+query to Grasshopper, paired with a new optional input/outputs on SAM's existing
+`SAMAnalyticalPreparePartOIteration` component. No new selection logic anywhere: both sides read data the
+core libraries already compute.
 
 ## Current status
 
@@ -289,6 +291,72 @@ leaf and asserts the shipped file is at exactly that relative path (it fails if 
 setting is renamed, or the assembly is renamed), and `TheReaderAndTheShippedFile_AgreeOnTheFileName` stops
 either side of the file name being renamed alone.
 
+## Grasshopper Seam 1 (2026-08-31) - exposing the existing catalogue and selection through Grasshopper
+
+**Goal.** Make Iteration 2's already-implemented ventilation-unit selection usable from a normal Grasshopper
+canvas, without redesigning the analytical architecture or adding a second selection algorithm. The
+selection kernel (`Query.SelectSmallestCapableVentilationUnit`) and the catalogue reader
+(`Query.VentilationUnitTemplates`/`VentilationUnitCapacityDescriptors`/`Analytical.Query.UnselectableVentilationUnitTemplates`)
+already existed and needed no change; only a Grasshopper-facing seam was missing on either side.
+
+**What was added here.**
+
+| File | What |
+|---|---|
+| `Grasshopper/SAM.Analytical.Grasshopper.Systems/Component/SAMAnalyticalSystemVentilationUnitCatalogue.cs` (new) | Reads the catalogue via the existing `Query` API and reports it as three outputs: `ventilationUnitCapacityDescriptors` (selectable products only, as `GooObject`), `unselectableVentilationUnitTemplates` (as `GooSAMObject`, since `VentilationUnitTemplate` is a `SAMObject`) and `unselectableReasons` - aligned item-for-item with the second output. One optional `directory_` input, resolved by the existing `Query.VentilationUnitTemplates(directory)` (no path-resolution logic duplicated in Grasshopper). |
+| `SAM.Analytical.Systems.Tests/VentilationUnitCatalogueTests.cs` (+2 tests, section J) | Pins the two required engineering behaviours directly against the combination the component calls: the shipped Nuaire product is real (catalogue read succeeds), reported unselectable with a reason, and the selectable list is empty *without reading as a failed load*; a controlled two-product fixture (100/100 and 150/150 l/s) selects the 150 l/s unit for a 115/115 l/s duty - never 100, never "nearest", and 115 is never written back as a capacity. |
+
+**Companion change in `SAM-BIM/SAM`** (not this repository, recorded here because the two form one seam):
+`SAMAnalyticalPreparePartOIteration` gained one optional input, `ventilationUnitCapacityDescriptors_`
+(`Param_GenericObject`, list), passed straight into the existing 5-argument
+`Modify.PreparePartOIteration(..., ventilationUnitCapacityDescriptors)` overload - unconnected, the call
+behaves exactly as it did before the parameter existed (`ventilationUnitCapacityDescriptors` stays `null`,
+the library's own guard clause skips selection entirely). Three previously-hidden `PartOIterationPreparation`
+outputs were also exposed: `ventilationSystems`/`airHandlingUnits` (plural, `GooAnalyticalObjectParam`) and
+`ventilationUnitSelections` (`GooObjectParam`, since `VentilationUnitSelection` is not an `IJSAMObject`).
+
+**No SAM -> SAM_Systems dependency was introduced.** `SAM.Analytical.Grasshopper` never references
+`SAM.Analytical.Systems`; the two components' outputs and inputs meet only as wires on a Grasshopper canvas,
+matching how this catalogue seam's manufacturer/selection split already keeps the two repositories apart.
+
+**Real Nuaire behaviour, confirmed end to end.** `MRXBOXAB-ECO5-AECV + MR-ECO-COOL-V` reaches
+`SAMAnalyticalSystemVentilationUnitCatalogue`'s `unselectableVentilationUnitTemplates` output with its full
+performance data and a stated reason, and reaches `ventilationUnitCapacityDescriptors` **not at all** - so a
+canvas wiring the shipped catalogue into `SAMAnalytical.PreparePartOIteration` selects nothing for it, loudly
+(via the existing refusal-reporting path), rather than silently approving equipment nobody has established a
+capacity for.
+
+**Test results.** `SAM.Analytical.Systems.Tests`: 43/43 focused (`VentilationUnitCatalogueTests`), 83/83 full
+suite. `SAM.Analytical.Systems.Mollier.Tests`: 123/123 (regression, unaffected by this change). Both
+`SAM.Analytical.Grasshopper.Systems` and `SAM.Analytical.Systems.Tests` build clean in Release (0 CS errors);
+the project-level `dotnet build` of the Grasshopper `.csproj` alone fails its post-build deploy step with the
+pre-existing `*Undefined*\files\resources` xcopy quirk when `$(SolutionDir)` is not supplied (environmental -
+same quirk `SAM`'s own progress notes record; passing `-p:SolutionDir=...` or building via the `.sln`
+resolves it, and CI is unaffected).
+
+**GH acceptance.** No live-Grasshopper/Rhino test harness exists in either repository (confirmed by
+inspection: the one Grasshopper-driving test project, `SAM.Core.Grasshopper.Tests`, never calls
+`SolveInstance`, and neither test project here nor in `SAM` references `Grasshopper.Kernel`/`GH_IO`). Per
+the brief, no new testing framework was built for this. The manual canvas for final licensed acceptance:
+
+```
+Part F
+  -> SAMAnalytical.PreparePartOIteration   (_partOIteration = BasePassive, _ventilationStrategies = "MVRE")
+       ventilationUnitCapacityDescriptors_ <- SAMAnalytical.SystemVentilationUnitCatalogue.ventilationUnitCapacityDescriptors
+  -> outputs: ventilationUnitSelections, airHandlingUnits, ventilationSystems, refusals
+```
+
+- **Acceptance A (real installed catalogue):** leave `SAMAnalytical.SystemVentilationUnitCatalogue.directory_`
+  unconnected. Expect `unselectableVentilationUnitTemplates` to carry the Nuaire product with a reason on its
+  own output, `ventilationUnitCapacityDescriptors` empty, and `PreparePartOIteration`'s
+  `ventilationUnitSelections` empty with no equipment falsely selected.
+- **Acceptance B (test catalogue):** point `directory_` at a folder holding a hand-written
+  `VentilationUnitCatalogue.JSON` with two synthetic products (e.g. 100/100 and 150/150 l/s - see
+  `TemporaryTwoProductCatalogue` in the tests above for the exact JSON shape). Expect the dwelling's design
+  duty to be calculated by the unchanged network, the smallest capable unit selected (150 l/s for a duty
+  above 100), that reference to appear in `ventilationUnitSelections`/on the analytical AHU, and
+  `ventilationTerminals`' design flows to read exactly as they did before the catalogue was connected.
+
 ## Issues / blockers
 
 - **Unresolved manufacturer fact.** The Nuaire unit's maximum supply and extract airflow. Until sourced -
@@ -310,7 +378,10 @@ either side of the file name being renamed alone.
 
 ## Next step
 
-Iteration 3, first step: resolve the Nuaire capacity, then build the read-only bridge - given an
+Merge the Grasshopper Seam 1 pair (this repository and `SAM-BIM/SAM`'s
+`feature/parto-iteration2-gh-equipment-selection`) once both are reviewed. Seam 2 and Iteration 3 are
+deliberately **not** started on this branch - see the brief this stage worked from. Beyond that, Iteration 3,
+first step: resolve the Nuaire capacity, then build the read-only bridge - given an
 `AirHandlingUnit` carrying a `VentilationUnitReference`, resolve its template from this catalogue and
 report the hourly supply airflow and leaving-air temperature the template and its control curve imply for
 a supplied entering-temperature series. Read-only, no TAS, no model writes - so the control aggregation
