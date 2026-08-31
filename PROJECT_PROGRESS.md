@@ -1,15 +1,22 @@
 # Project Progress
 
 ## Branch
-`feature/parto-iteration2-ventilation-unit-catalogue`, cut from `sow/2026-Q3` at **`208379d`** (unchanged
-integration tip). Raised as a pull request against `sow/2026-Q3`. **Not merged.**
+The ventilation unit catalogue feature itself is **merged**: `feature/parto-iteration2-ventilation-unit-catalogue`
+went in as PR #15 (`32fff611`), onto `SAM-BIM/SAM_Systems` `sow/2026-Q3`, after the SAM manufacturer-catalogue
+dependency below merged first.
 
-**Depends on `SAM-BIM/SAM`.** This needs the `SAM.Analytical` manufacturer-template vocabulary added on
-`feature/parto-iteration2-manufacturer-catalogue` (based on SAM `sow/2026-Q3` at `ce95bc5b`). It will not
-build against an older `SAM.Analytical`, so **the SAM pull request must merge first**.
+Current work is a narrow **follow-up hardening branch**, `fix/parto-catalogue-late-p2-hardening`, cut from
+the current `sow/2026-Q3` (`32fff611`) - see the *Follow-up hardening* section below. Raised as **PR #16**
+against `sow/2026-Q3`. **Not merged yet.**
+
+**Depended on `SAM-BIM/SAM`** for the ventilation unit catalogue feature (now merged, both sides). The
+current hardening branch depends only on the SAM API surface already merged into SAM's `sow/2026-Q3`
+(`5433c20f`) - it does not require SAM's own late-P2 hardening follow-up (SAM PR #82) to merge first, and
+was built and tested against SAM's `sow/2026-Q3` specifically to confirm that independence.
 
 ## Last updated
-2026-08-28 - the manufacturer ventilation unit catalogue and its reader.
+2026-08-31 - late Codex P2 hardening follow-up (PR #16): catalogue schema enforcement and the
+present-but-null vs. absent optional-data distinction.
 
 ## Current status
 
@@ -106,6 +113,60 @@ directory and reads the real catalogue through it, proving the upgrade path end 
 CI against `sow/2026-Q3` may still fail until `SAM-BIM/SAM` #80 merges - **expected**, per the declared
 dependency; not worked around here. New commit on top of `29059626` on
 `feature/parto-iteration2-ventilation-unit-catalogue`. Not merged.
+
+## Follow-up hardening (2026-08-31) - PR #16, two late Codex P2 findings
+
+After PR #15 merged (`32fff611`), a final Codex review pass raised two P2 findings against the merged head.
+Both confirmed and fixed on `fix/parto-catalogue-late-p2-hardening` (**PR #16**, commit `be6a132e`, later
+updated to document this section per Codex's own P1 finding on that documentation gap - see below).
+
+### 1. Catalogue schema was never enforced
+
+`VentilationUnitTemplates()` read `Templates` without ever checking the `Schema` key - even though the
+shipped catalogue already declares `"Schema": "VentilationUnitCatalogue:v1"` and a test
+(`TheShippedCatalogue_DeclaresItsSchema`) already asserted the file *states* it. Nothing refused a
+catalogue with a missing, wrong, or future-looking schema tag; every one of those would have been read as
+if it agreed with this reader.
+
+**Fixed:** a new public constant, `Query.VentilationUnitCatalogueSchema = "VentilationUnitCatalogue:v1"`,
+and a gate in `VentilationUnitTemplates()` - checked before `Templates` is read at all - that refuses the
+whole catalogue unless the `Schema` key is present, is a JSON string, and equals that constant exactly
+(ordinal). A schema that looks plausible for a future version, e.g. `"VentilationUnitCatalogue:v2"`, is
+refused the same way as a missing or garbled one - never silently parsed as v1.
+
+### 2. Present-but-null optional data read the same as absent
+
+The `PerformanceTable`/`FlowFractionByControlTemperature` checks tested the **parsed** template property
+(`ventilationUnitTemplate.PerformanceTable != null && !...IsValid`). A genuinely absent JSON key and a key
+written as `"PerformanceTable": null` both parse to the same null property on `VentilationUnitTemplate`, so
+a present-but-null key was silently treated as the documented "no performance data" state instead of
+refusing the catalogue as malformed.
+
+**Fixed:** both checks now read the raw JSON key via `jsonObject_Template.ContainsKey(...)` first. The rule
+this preserves, unchanged: an **absent** key is the legal "data not supplied" state (allowed, e.g. a
+selection-only product); a key that is **present** - whether `null`, the wrong JSON shape, or an object that
+does not parse into a valid `VentilationUnitPerformanceTable`/`FlowFractionControlCurve` - is malformed data
+and refuses the whole catalogue, exactly as a present-but-unusable table already did before this fix.
+`Rank` and the two capacity fields already followed the correct absent-vs-present-but-bad pattern and were
+not touched; inspection did not find the same bug elsewhere in this catalogue's optional fields.
+
+**No production code changed beyond `VentilationUnitTemplates.cs`.** No architecture, dependency, or
+selection-rule change - the fix is two narrow reader-hardening changes in the one file the two findings
+named.
+
+### Validation
+
+| Suite | Result |
+|---|---|
+| `VentilationUnitCatalogueTests` (focused, incl. 10 new: schema missing/wrong/future, present-but-null on both optional fields, absent-still-allowed regression guard, exact-v1-accepted) | **41 / 41** |
+| `SAM.Analytical.Systems.Tests` (full) | **81 / 81** |
+| `SAM.Analytical.Systems.Mollier.Tests` | **123 / 123** |
+
+Built (`dotnet build SAM_Systems.sln -c Release`) and tested against SAM's currently-merged `sow/2026-Q3`
+(`5433c20f`) specifically - **not** against SAM's own in-flight late-P2 hardening branch (SAM PR #82) - to
+confirm this PR's dependency on SAM is unchanged and it does not require that sibling PR to merge first.
+
+Not merged yet.
 
 ## Decisions / assumptions
 
