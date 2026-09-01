@@ -19,7 +19,7 @@
     "PerformanceTable is what Iteration 3 will simulate from. AN AIRFLOW APPEARING ON A PERFORMANCE",
     "TABLE AXIS IS A PUBLISHED DUTY POINT AND IS NEVER READ AS THE UNIT CAPACITY. A template whose",
     "capacity is unresolved keeps its full performance data and is simply not offered to selection - see",
-    "UnresolvedCapacityNote on the entry, and Query.UnselectableVentilationUnitTemplates, which lists such",
+    "UnresolvedCapacityNote on such an entry, and Query.UnselectableVentilationUnitTemplates, which lists such",
     "entries with the reason so that a missing product is reportable rather than invisible.",
     "",
     "PERFORMANCE DATA IS THE MANUFACTURER RAW TABLE, NOT A DERIVED REPRESENTATION. Values are stored in",

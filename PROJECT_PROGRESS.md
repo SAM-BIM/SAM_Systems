@@ -422,8 +422,9 @@ Part F
 
 Merge the Grasshopper Seam 1 pair (this repository and `SAM-BIM/SAM`'s
 `feature/parto-iteration2-gh-equipment-selection`) once both are reviewed. Seam 2 and Iteration 3 are
-deliberately **not** started on this branch - see the brief this stage worked from. Beyond that, Iteration 3,
-first step: resolve the Nuaire capacity, then build the read-only bridge - given an
+deliberately **not** started on this branch - see the brief this stage worked from. Beyond that, Iteration 3
+starts at the read-only bridge; the Nuaire capacity that used to gate it is resolved (150/150 l/s, see
+*THE CAPACITY COMES FROM THE FAN CURVE* above). Given an
 `AirHandlingUnit` carrying a `VentilationUnitReference`, resolve its template from this catalogue and
 report the hourly supply airflow and leaving-air temperature the template and its control curve imply for
 a supplied entering-temperature series. Read-only, no TAS, no model writes - so the control aggregation
