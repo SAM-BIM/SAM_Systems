@@ -46,12 +46,15 @@ namespace SAM.Analytical.Grasshopper.Systems
               "input - this component never selects a unit itself, it only exposes the catalogue selection reads from.\n" +
               "\n" +
               "A product whose maximum supply/extract airflow is unresolved (published performance data with no stated " +
-              "maximum - the real Nuaire MRXBOXAB-ECO5-AECV / MR-ECO-COOL-V is exactly this today) is real and present in " +
-              "the catalogue, but is deliberately left out of ventilationUnitCapacityDescriptors: guessing a maximum from " +
-              "a performance table's largest published duty point is the specific mistake this seam exists to prevent. " +
+              "maximum) is real and present in the catalogue, but is deliberately left out of " +
+              "ventilationUnitCapacityDescriptors: guessing a maximum from a performance table's largest published duty " +
+              "point is the specific mistake this seam exists to prevent. " +
               "It is reported instead through unselectableVentilationUnitTemplates and unselectableReasons, so an empty " +
               "ventilationUnitCapacityDescriptors here reads as 'nothing is selectable yet', never as 'the catalogue " +
-              "failed to load' - those two states are reported differently (see the runtime messages).",
+              "failed to load' - those two states are reported differently (see the runtime messages).\n" +
+              "\n" +
+              "Which products are in which state is a fact about the catalogue, not about this component, so no product " +
+              "is named here - read the two outputs to see where each one landed.",
               "SAM", "Systems")
         {
         }
