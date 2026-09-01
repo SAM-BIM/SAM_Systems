@@ -30,9 +30,14 @@ namespace SAM.Analytical.Systems.Tests
     /// against the engineering spreadsheet that preceded this work, which holds the same 3 x 4 x 8 table.
     /// </para>
     /// <para>
-    /// <b>The capacity tests are the point of the exercise.</b> The brochure states no maximum supply or
-    /// extract airflow for this unit, so the catalogue states none, and several tests below exist purely
-    /// to prove that the 120 l/s at the end of the performance table has not quietly become one.
+    /// <b>The capacity tests are the point of the exercise.</b> The brochure's cooling-duty table publishes
+    /// airflow as a set of DUTY POINTS (50-120 l/s), and the catalogue must never read that table's largest
+    /// axis value as the unit's capacity - several tests below exist purely to prove that the 120 l/s at the
+    /// end of the performance table has not quietly become one. The unit's actual maximum airflow instead
+    /// comes from the SAME brochure pages' separate fan static-pressure chart: each of its three fan-speed
+    /// curves (319 W / 167 W / 77 W, per the Electrical and Sound Data table) ends at a distinct free-air
+    /// (0 Pa) flow rate, and the highest, Curve 1, ends at 150 l/s - a real manufacturer figure, digitised
+    /// from the chart's own vector paths, not the performance table's axis and not invented.
     /// </para>
     /// </summary>
     public class VentilationUnitCatalogueTests
@@ -198,66 +203,80 @@ namespace SAM.Analytical.Systems.Tests
         }
 
         // =================================================================================================
-        // C. Capacity is not a duty point
+        // C. Capacity comes from the fan curve, never from a duty point
         // =================================================================================================
 
         /// <summary>
-        /// <b>The unresolved fact, and the reason this catalogue does not invent one.</b> The brochure
-        /// states no maximum supply or extract airflow, so the template states none - and the 120 l/s that
-        /// ends its performance table has not become one.
+        /// <b>The resolved fact, and where it is NOT read from.</b> The brochure's cooling-duty table
+        /// publishes 50-120 l/s as sample DUTY POINTS - that is not a capacity, and 120 must never appear as
+        /// either maximum. The unit's real maximum comes from the separate fan static-pressure chart on the
+        /// same pages: Curve 1 (319 W, the highest of the three fan-speed curves the Electrical and Sound
+        /// Data table names) reaches 0 Pa - free air, no external resistance - at 150 l/s.
         /// </summary>
         [Fact]
-        public void TheNuaireCapacity_IsUnresolvedAndIsNotTheTablesLargestAirflow()
+        public void TheNuaireCapacity_IsResolvedFromTheFanCurveNotTheTablesLargestAirflow()
         {
             VentilationUnitTemplate ventilationUnitTemplate = Nuaire();
 
-            Assert.True(double.IsNaN(ventilationUnitTemplate.MaximumSupplyFlowRate_Lps));
-            Assert.True(double.IsNaN(ventilationUnitTemplate.MaximumExtractFlowRate_Lps));
-            Assert.False(ventilationUnitTemplate.HasSelectionCapacity);
+            Assert.Equal(150, ventilationUnitTemplate.MaximumSupplyFlowRate_Lps, 6);
+            Assert.Equal(150, ventilationUnitTemplate.MaximumExtractFlowRate_Lps, 6);
+            Assert.True(ventilationUnitTemplate.HasSelectionCapacity);
+            Assert.Null(ventilationUnitTemplate.UnresolvedCapacityNote);
 
-            //The number it would have been, had anybody reached for it.
-            Assert.Equal(120, ventilationUnitTemplate.PerformanceTable.Axis(VentilationUnitPerformanceAxis.Name_AirFlowRate).Maximum);
+            //The performance table's own axis maximum is a different fact and must not equal the capacity -
+            //if it ever does, the two sources have been confused with each other again.
+            double tableMaximum = ventilationUnitTemplate.PerformanceTable.Axis(VentilationUnitPerformanceAxis.Name_AirFlowRate).Maximum;
+            Assert.Equal(120, tableMaximum);
+            Assert.NotEqual(tableMaximum, ventilationUnitTemplate.MaximumSupplyFlowRate_Lps);
 
-            //The absence is documented on the entry, with what would resolve it.
-            Assert.Contains("brochure states no maximum supply or extract airflow", ventilationUnitTemplate.UnresolvedCapacityNote);
-            Assert.Contains("duty points", ventilationUnitTemplate.UnresolvedCapacityNote);
+            //Traceable to the chart it was read from, not just to the brochure in general.
+            Assert.Contains("fan static-pressure chart", ventilationUnitTemplate.Source);
+            Assert.Contains("Curve 1", ventilationUnitTemplate.Source);
+            Assert.Contains("150 l/s", ventilationUnitTemplate.Source);
 
-            //So the product is complete data and is simply not selectable.
-            Assert.Null(Analytical.Query.CapacityDescriptor(ventilationUnitTemplate));
-            Assert.Empty(Query.VentilationUnitCapacityDescriptors(Directory_Resources()));
+            //So the product is now genuinely selectable.
+            Assert.NotNull(Analytical.Query.CapacityDescriptor(ventilationUnitTemplate));
+            Assert.Single(Query.VentilationUnitCapacityDescriptors(Directory_Resources()));
         }
 
         /// <summary>
-        /// The unselectable product is <b>reported</b>, not silently absent. A missing product is exactly
-        /// the kind of gap nobody notices until they wonder why the unit they specified was never chosen.
+        /// The shipped catalogue's one product is selectable, and nothing is reported as unselectable - the
+        /// fan-curve figure is a stated capacity, not an absence to explain.
         /// </summary>
         [Fact]
-        public void TheUnselectableProduct_IsReportedRatherThanSilentlyAbsent()
+        public void TheNuaireProduct_IsSelectableAndReportsNoUnselectableEntries()
         {
             List<VentilationUnitTemplate> ventilationUnitTemplates = Query.VentilationUnitTemplates(Directory_Resources());
 
             Assert.NotNull(ventilationUnitTemplates);
             Assert.NotEmpty(ventilationUnitTemplates);
 
-            KeyValuePair<VentilationUnitTemplate, string> unselectable = Assert.Single(Analytical.Query.UnselectableVentilationUnitTemplates(ventilationUnitTemplates));
+            Assert.Empty(Analytical.Query.UnselectableVentilationUnitTemplates(ventilationUnitTemplates));
 
-            Assert.Equal(model_Nuaire, unselectable.Key.VentilationUnitReference.Model);
-            Assert.Contains("maximum supply and maximum extract airflow", unselectable.Value);
-            Assert.Contains("published duty point, not the unit's maximum", unselectable.Value);
+            VentilationUnitCapacityDescriptor descriptor = Assert.Single(Analytical.Query.CapacityDescriptors(ventilationUnitTemplates));
+            Assert.Equal(model_Nuaire, descriptor.VentilationUnitReference.Model);
+            Assert.Equal(150, descriptor.MaximumSupplyFlowRate_Lps, 6);
+            Assert.Equal(150, descriptor.MaximumExtractFlowRate_Lps, 6);
         }
 
         /// <summary>
-        /// A duty the 120 l/s endpoint would have covered selects nothing at all, which is the behaviour
-        /// the whole arrangement exists to produce: a loud absence rather than a plausible answer.
+        /// A duty within the 150 l/s free-air maximum selects the Nuaire unit; a duty above it is refused -
+        /// proving the chart figure actually reaches the selection kernel, both ways.
         /// </summary>
         [Fact]
-        public void ADutyTheTableEndpointWouldHaveCovered_SelectsNothing()
+        public void ADutyWithinTheFanCurveMaximum_SelectsNuaire_AboveItRefuses()
         {
-            VentilationUnitSelection ventilationUnitSelection = Analytical.Query.SelectSmallestCapableVentilationUnit(Query.VentilationUnitCapacityDescriptors(Directory_Resources()), 100, 100);
+            List<VentilationUnitCapacityDescriptor> descriptors = Query.VentilationUnitCapacityDescriptors(Directory_Resources());
 
-            Assert.False(ventilationUnitSelection.IsSelected);
-            Assert.Null(ventilationUnitSelection.Descriptor);
-            Assert.False(string.IsNullOrWhiteSpace(ventilationUnitSelection.Reason));
+            VentilationUnitSelection selected = Analytical.Query.SelectSmallestCapableVentilationUnit(descriptors, 100, 100);
+            Assert.True(selected.IsSelected);
+            Assert.Equal(model_Nuaire, selected.VentilationUnitReference.Model);
+            Assert.Equal(50, selected.SupplyHeadroom_Lps, 6);
+
+            VentilationUnitSelection refused = Analytical.Query.SelectSmallestCapableVentilationUnit(descriptors, 200, 200);
+            Assert.False(refused.IsSelected);
+            Assert.Null(refused.Descriptor);
+            Assert.False(string.IsNullOrWhiteSpace(refused.Reason));
         }
 
         // =================================================================================================
@@ -701,29 +720,29 @@ namespace SAM.Analytical.Systems.Tests
         // =================================================================================================
 
         /// <summary>
-        /// <b>Required behaviour, Case 1: the real Nuaire product must be visible, and must not be
-        /// selectable.</b> The catalogue read succeeds - this is not "catalogue missing" - it reports
-        /// exactly the Nuaire product as unselectable with a reason, and the selectable list is empty. An
-        /// empty selectable list here must not read as a failed load.
+        /// <b>Required behaviour, Case 1: the real Nuaire product must be visible, and must be selectable.</b>
+        /// The catalogue read succeeds and reports exactly the Nuaire product on the selectable side, with
+        /// nothing on the unselectable side - the fan-curve maximum resolved its capacity, so there is no
+        /// absence left to report.
         /// </summary>
         [Fact]
-        public void ShippedCatalogue_NuaireIsVisibleAndUnselectable_SelectableListIsEmptyNotMissing()
+        public void ShippedCatalogue_NuaireIsVisibleAndSelectable_UnselectableListIsEmpty()
         {
             List<VentilationUnitTemplate> ventilationUnitTemplates = Query.VentilationUnitTemplates(Directory_Resources());
 
-            //The read itself succeeded - the fact that distinguishes "empty because nothing is selectable
-            //yet" from "empty because the catalogue could not be read", which is exactly the distinction
-            //SAMAnalyticalSystemVentilationUnitCatalogue reports through separate runtime messages.
+            //The read itself succeeded - the fact that distinguishes "nothing unselectable because every
+            //product resolved" from "empty because the catalogue could not be read", which is exactly the
+            //distinction SAMAnalyticalSystemVentilationUnitCatalogue reports through separate runtime
+            //messages.
             Assert.NotNull(ventilationUnitTemplates);
 
             List<VentilationUnitCapacityDescriptor> ventilationUnitCapacityDescriptors = Analytical.Query.CapacityDescriptors(ventilationUnitTemplates);
             List<KeyValuePair<VentilationUnitTemplate, string>> unselectable = Analytical.Query.UnselectableVentilationUnitTemplates(ventilationUnitTemplates);
 
-            Assert.Empty(ventilationUnitCapacityDescriptors);
+            Assert.Empty(unselectable);
 
-            KeyValuePair<VentilationUnitTemplate, string> nuaire = Assert.Single(unselectable);
-            Assert.Equal(model_Nuaire, nuaire.Key.VentilationUnitReference.Model);
-            Assert.False(string.IsNullOrWhiteSpace(nuaire.Value));
+            VentilationUnitCapacityDescriptor nuaire = Assert.Single(ventilationUnitCapacityDescriptors);
+            Assert.Equal(model_Nuaire, nuaire.VentilationUnitReference.Model);
 
             //Selectable and unselectable together account for every template read - nothing silently
             //vanishes between the two outputs the component hands to Grasshopper.

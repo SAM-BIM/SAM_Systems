@@ -44,13 +44,42 @@ same arrangement, for the same reason, as `SystemEnergyCentre/CapabilityIndex.JS
 - Source: `Nuaire, MRXBOX Hybrid Cooling System brochure, v.1 July 2022, pages 6-7`, carrying the
   brochure's own "typical cooling data / contact us for project-specific data" caveat.
 
-### THE CAPACITY IS DELIBERATELY ABSENT
+### THE CAPACITY COMES FROM THE FAN CURVE, NEVER FROM A DUTY POINT
 
-`MaximumSupplyFlowRate_Lps` and `MaximumExtractFlowRate_Lps` are **not stated**, so the Nuaire entry is a
-complete record of published performance and is **not selectable**. The brochure states no maximum supply
-or extract airflow. Its 50-120 l/s figures are the duty points the selection tables are published at, and
-the fan-curve chart's axis reaching 125 l/s is an axis tick. **Neither is a statement about the fan, and
-neither has been promoted into the gap.** `UnresolvedCapacityNote` on the entry says what would resolve it.
+`MaximumSupplyFlowRate_Lps` and `MaximumExtractFlowRate_Lps` are both **150 l/s**, and the source is the
+**fan static-pressure chart** on brochure pages 6-7 - *not* the cooling-duty table below it. The chart plots
+three fan-speed curves, each identified by its power draw in the Electrical and Sound Data table
+(Curve 1 = 319 W, Curve 2 = 167 W, Curve 3 = 77 W). Each curve's free-air (0 Pa) endpoint is the airflow that
+setting delivers against no external resistance, and Curve 1 - the highest setting - ends at **150 l/s**.
+Digitised from the chart's own vector paths against its axis calibration, and re-verified independently on
+2026-09-01: Curve 1 -> 150.2 l/s, Curve 2 -> 119.5 l/s, Curve 3 -> 90.1 l/s, all three terminating on the
+same 0 Pa horizontal.
+
+**Curves 2 and 3 are operating states of one physical unit and are NOT catalogue entries.** Promoting them
+to 120 l/s and 90 l/s "products" would manufacture three selectable sizes out of one fan, which is exactly
+the confusion this section exists to prevent. One physical product, one maximum per direction.
+
+**The 120 l/s that ends the performance table is still not a capacity.** It is the last column of a table of
+sample duty points, and `TheNuaireCapacity_IsResolvedFromTheFanCurveNotTheTablesLargestAirflow` asserts the
+two numbers are not equal precisely so the sources cannot be confused with each other again.
+
+**Read it as an upper bound, not an installed duty.** 150 l/s is free air; any real installation has duct
+resistance, so the flow the unit delivers on site is lower. The field is named "Maximum...FlowRate" and is
+used only as a selection ceiling, which is what a free-air figure legitimately is.
+
+**Resolving the capacity does not collapse the authority chain.** These stay four separate facts, and this
+figure is only the third of them:
+
+```
+PartFRequiredAirFlow != DesignAirFlow != SelectedEquipmentCapacity != OperatingAirFlow
+```
+
+The Approved Document demands a rate of a room; the design realizes it; the selected product must be able to
+move it; what the unit actually moves at 3pm in August is Iteration 3's question. A capacity is never written
+back as a design airflow - proved on the licensed run of 2026-09-01, where connecting this catalogue to three
+dwellings at 30/30, 63/63 and 63/63 l/s left all 105,120 hourly TAS values bit-identical to the same run
+with no product selected.
+
 The related EDSL / Hoare Lea thread mentions "80-90 L/s" as the *project's* assumption; that is not a
 manufacturer statement and was not written here.
 
@@ -320,11 +349,18 @@ outputs were also exposed: `ventilationSystems`/`airHandlingUnits` (plural, `Goo
 matching how this catalogue seam's manufacturer/selection split already keeps the two repositories apart.
 
 **Real Nuaire behaviour, confirmed end to end.** `MRXBOXAB-ECO5-AECV + MR-ECO-COOL-V` reaches
-`SAMAnalyticalSystemVentilationUnitCatalogue`'s `unselectableVentilationUnitTemplates` output with its full
-performance data and a stated reason, and reaches `ventilationUnitCapacityDescriptors` **not at all** - so a
-canvas wiring the shipped catalogue into `SAMAnalytical.PreparePartOIteration` selects nothing for it, loudly
-(via the existing refusal-reporting path), rather than silently approving equipment nobody has established a
-capacity for.
+`SAMAnalyticalSystemVentilationUnitCatalogue`'s `ventilationUnitCapacityDescriptors` output at 150/150 l/s
+with its full performance data, and `unselectableVentilationUnitTemplates` is empty - there is no absence
+left to report. A canvas wiring the shipped catalogue into `SAMAnalytical.PreparePartOIteration` therefore
+selects it for any dwelling duty at or below 150 l/s on both sides, and refuses above that. Verified on the
+licensed run of 2026-09-01: three dwellings at 30/30, 63/63 and 63/63 l/s all select it, with 120/87/87 l/s
+of headroom left deliberately untaken.
+
+**One product is not a selection ladder.** With a single size in the shipped catalogue there is no
+"between capacities" case to exercise, so smallest-capable / next-capable / refused are proved against the
+controlled synthetic descriptors in `SAM.Tests/PartOVentilationUnitSelectionTests.cs` and
+`TemporaryTwoProductCatalogue` here. That separation is deliberate and should stay: the shipped catalogue
+states what the manufacturer published, and the algorithm is tested against fixtures built for the purpose.
 
 **Test results.** `SAM.Analytical.Systems.Tests`: 43/43 focused (`VentilationUnitCatalogueTests`), 83/83 full
 suite. `SAM.Analytical.Systems.Mollier.Tests`: 123/123 (regression, unaffected by this change). Both
@@ -347,9 +383,9 @@ Part F
 ```
 
 - **Acceptance A (real installed catalogue):** leave `SAMAnalytical.SystemVentilationUnitCatalogue.directory_`
-  unconnected. Expect `unselectableVentilationUnitTemplates` to carry the Nuaire product with a reason on its
-  own output, `ventilationUnitCapacityDescriptors` empty, and `PreparePartOIteration`'s
-  `ventilationUnitSelections` empty with no equipment falsely selected.
+  unconnected. Expect `ventilationUnitCapacityDescriptors` to carry the Nuaire product at 150/150 l/s,
+  `unselectableVentilationUnitTemplates` empty, and `PreparePartOIteration`'s `ventilationUnitSelections` to
+  hold one selection per dwelling with the design duty **unchanged** by the selection.
 - **Acceptance B (test catalogue):** point `directory_` at a folder holding a hand-written
   `VentilationUnitCatalogue.JSON` with two synthetic products (e.g. 100/100 and 150/150 l/s - see
   `TemporaryTwoProductCatalogue` in the tests above for the exact JSON shape). Expect the dwelling's design
@@ -359,9 +395,15 @@ Part F
 
 ## Issues / blockers
 
-- **Unresolved manufacturer fact.** The Nuaire unit's maximum supply and extract airflow. Until sourced -
-  a Nuaire technical datasheet, a fan selection, or the project-specific selection Nuaire ask for - the
-  product cannot be selected by Iteration 2. Intended behaviour, not a bug.
+- ~~**Unresolved manufacturer fact.** The Nuaire unit's maximum supply and extract airflow.~~ **closed
+  2026-09-01** - resolved to 150/150 l/s from the brochure's own fan static-pressure chart (Curve 1, free
+  air). See *THE CAPACITY COMES FROM THE FAN CURVE* above. Remaining caveat, not a blocker: it is a free-air
+  upper bound, so a project needing the *installed* duty still wants Nuaire's project-specific selection.
+- **Only one selectable product exists.** The brochure covers one physical MVHR unit. Its in-line variant is
+  named but explicitly publishes no performance ("contact Nuaire for performance data on the in-line
+  version"), and the opposite-handed unit is a spigot arrangement of the same fan - neither is a distinct
+  capability, so neither was added. Any future "which of several units" work needs a second authoritative
+  product, not a second reading of this one.
 - ~~Deployment unverified~~ **closed** - see *Deployment* above.
 - **Legacy IES compatibility is explicitly NOT a goal of this stage** and is not an open blocker. The
   supplied workbook contains no interpolated table, no external axis below 29 degC and no ramp expression -
