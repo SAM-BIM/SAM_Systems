@@ -48,6 +48,12 @@ namespace SAM.Analytical.Systems.Tests
 
         private const string coolingModule_Nuaire = "MR-ECO-COOL-V";
 
+        private const string model_XBC15 = "XBC15";
+
+        /// <summary>How many products the shipped catalogue holds. Stated once, so a test that means
+        /// "the whole catalogue" cannot be confused with a test that means "this one product".</summary>
+        private const int count_ShippedProducts = 2;
+
         // =================================================================================================
         // A. The catalogue reads, and says what it is
         // =================================================================================================
@@ -234,9 +240,13 @@ namespace SAM.Analytical.Systems.Tests
             Assert.Contains("Curve 1", ventilationUnitTemplate.Source);
             Assert.Contains("150 l/s", ventilationUnitTemplate.Source);
 
-            //So the product is now genuinely selectable.
+            //So the product is now genuinely selectable, and it is one of the products the catalogue offers.
             Assert.NotNull(Analytical.Query.CapacityDescriptor(ventilationUnitTemplate));
-            Assert.Single(Query.VentilationUnitCapacityDescriptors(Directory_Resources()));
+
+            List<VentilationUnitCapacityDescriptor> ventilationUnitCapacityDescriptors = Query.VentilationUnitCapacityDescriptors(Directory_Resources());
+
+            Assert.Equal(count_ShippedProducts, ventilationUnitCapacityDescriptors.Count);
+            Assert.Contains(ventilationUnitCapacityDescriptors, x => string.Equals(x.VentilationUnitReference.Model, model_Nuaire, StringComparison.Ordinal));
         }
 
         /// <summary>
@@ -253,8 +263,7 @@ namespace SAM.Analytical.Systems.Tests
 
             Assert.Empty(Analytical.Query.UnselectableVentilationUnitTemplates(ventilationUnitTemplates));
 
-            VentilationUnitCapacityDescriptor descriptor = Assert.Single(Analytical.Query.CapacityDescriptors(ventilationUnitTemplates));
-            Assert.Equal(model_Nuaire, descriptor.VentilationUnitReference.Model);
+            VentilationUnitCapacityDescriptor descriptor = Descriptor(Analytical.Query.CapacityDescriptors(ventilationUnitTemplates), model_Nuaire);
             Assert.Equal(150, descriptor.MaximumSupplyFlowRate_Lps, 6);
             Assert.Equal(150, descriptor.MaximumExtractFlowRate_Lps, 6);
         }
@@ -741,8 +750,11 @@ namespace SAM.Analytical.Systems.Tests
 
             Assert.Empty(unselectable);
 
-            VentilationUnitCapacityDescriptor nuaire = Assert.Single(ventilationUnitCapacityDescriptors);
-            Assert.Equal(model_Nuaire, nuaire.VentilationUnitReference.Model);
+            //Every shipped product is on the selectable side - none of them has an unresolved capacity.
+            Assert.Equal(count_ShippedProducts, ventilationUnitCapacityDescriptors.Count);
+
+            Descriptor(ventilationUnitCapacityDescriptors, model_Nuaire);
+            Descriptor(ventilationUnitCapacityDescriptors, model_XBC15);
 
             //Selectable and unselectable together account for every template read - nothing silently
             //vanishes between the two outputs the component hands to Grasshopper.
@@ -813,16 +825,385 @@ namespace SAM.Analytical.Systems.Tests
         }
 
         // =================================================================================================
+        // K. The real selection ladder - Nuaire MRXBOX 150/150 and Nuaire XBOXER XBC15 190/190
+        //    Two real products, so the "between capacities" case the shipped catalogue could not exercise
+        //    with one product is now a manufacturer boundary rather than a fixture. Section J's controlled
+        //    two-product fixture stays: the algorithm is tested against fixtures built for the purpose, and
+        //    this section tests what the FILE says reaches that algorithm.
+        // =================================================================================================
+
+        /// <summary>
+        /// The catalogue holds both Nuaire products, both selectable, with the identities, capacities and
+        /// ranks the sources state - and nothing reported as unselectable.
+        /// </summary>
+        [Fact]
+        public void TheShippedCatalogue_HoldsBothNuaireProducts()
+        {
+            List<VentilationUnitTemplate> ventilationUnitTemplates = Query.VentilationUnitTemplates(Directory_Resources());
+
+            Assert.NotNull(ventilationUnitTemplates);
+            Assert.Equal(count_ShippedProducts, ventilationUnitTemplates.Count);
+
+            Assert.Empty(Analytical.Query.UnselectableVentilationUnitTemplates(ventilationUnitTemplates));
+
+            VentilationUnitTemplate ventilationUnitTemplate_MRXBOX = Nuaire();
+            VentilationUnitTemplate ventilationUnitTemplate_XBC15 = XBC15();
+
+            Assert.Equal(manufacturer_Nuaire, ventilationUnitTemplate_MRXBOX.VentilationUnitReference.Manufacturer);
+            Assert.Equal(manufacturer_Nuaire, ventilationUnitTemplate_XBC15.VentilationUnitReference.Manufacturer);
+
+            Assert.Equal(150, ventilationUnitTemplate_MRXBOX.MaximumSupplyFlowRate_Lps, 6);
+            Assert.Equal(150, ventilationUnitTemplate_MRXBOX.MaximumExtractFlowRate_Lps, 6);
+            Assert.Equal(190, ventilationUnitTemplate_XBC15.MaximumSupplyFlowRate_Lps, 6);
+            Assert.Equal(190, ventilationUnitTemplate_XBC15.MaximumExtractFlowRate_Lps, 6);
+
+            //Rank is declared, never inferred - and a missing one would have refused the whole catalogue.
+            Assert.Equal(10, ventilationUnitTemplate_MRXBOX.Rank);
+            Assert.Equal(20, ventilationUnitTemplate_XBC15.Rank);
+
+            //Rank decides nothing here, and the test says so rather than leaving it implied: the two are
+            //different sizes, so size separates them before rank is ever consulted.
+            Assert.NotEqual(ventilationUnitTemplate_MRXBOX.MaximumSupplyFlowRate_Lps, ventilationUnitTemplate_XBC15.MaximumSupplyFlowRate_Lps);
+
+            //The cooling module is part of the MRXBOX identity and the XBC15 has none - which is what makes
+            //them two identities rather than one product described twice.
+            Assert.Equal(coolingModule_Nuaire, ventilationUnitTemplate_MRXBOX.VentilationUnitReference.Reference);
+            Assert.True(string.IsNullOrEmpty(ventilationUnitTemplate_XBC15.VentilationUnitReference.Reference));
+            Assert.True(string.IsNullOrEmpty(ventilationUnitTemplate_XBC15.CoolingModuleModel));
+        }
+
+        /// <summary>
+        /// <b>Where the XBC15's 190 l/s comes from, and what it is not.</b>
+        /// <para>
+        /// The catalogue publishes a Specific Fan Power table whose 100% fan-speed row is tabulated against
+        /// external static pressure, and its free-air (0 Pa) end is 0.19 m3/s. That is the flow the unit
+        /// delivers against no external resistance, so it is the capacity - the same free-air-endpoint
+        /// reasoning as the MRXBOX entry, except that this source states it numerically instead of drawing
+        /// it on a chart.
+        /// </para>
+        /// <para>
+        /// <b>The asymmetry with the MRXBOX capacity test is deliberate.</b> For the MRXBOX the capacity had
+        /// to be different from anything on its performance table, because that table is a grid of cooling
+        /// duty points and its largest airflow (120 l/s) is not a fan limit. For the XBC15 the capacity IS
+        /// the table's own 0 Pa entry, because that table is the fan row. So what this test guards is not
+        /// "capacity differs from the table" but the thing that actually goes wrong: that a published DUTY
+        /// POINT - the catalogue's 0.1 m3/s @ 100 Pa example selection, and the 75% fan-speed row's
+        /// 0.14 m3/s - is never read as the capacity.
+        /// </para>
+        /// </summary>
+        [Fact]
+        public void TheXBC15Capacity_IsTheFreeAirEndOfItsPublishedFanRow()
+        {
+            VentilationUnitTemplate ventilationUnitTemplate = XBC15();
+
+            Assert.True(ventilationUnitTemplate.HasSelectionCapacity);
+            Assert.Null(ventilationUnitTemplate.UnresolvedCapacityNote);
+
+            Assert.Equal(190, ventilationUnitTemplate.MaximumSupplyFlowRate_Lps, 6);
+            Assert.Equal(190, ventilationUnitTemplate.MaximumExtractFlowRate_Lps, 6);
+
+            VentilationUnitPerformanceTable ventilationUnitPerformanceTable = ventilationUnitTemplate.PerformanceTable;
+
+            Assert.NotNull(ventilationUnitPerformanceTable);
+
+            //The capacity IS the 0 Pa entry of the published row, expressed in l/s rather than m3/s. Read
+            //off the table by index rather than restated, so the two cannot drift apart.
+            double airFlowRate_FreeAir_M3s = ventilationUnitPerformanceTable.PublishedValue("AirFlowRate", 0);
+
+            Assert.Equal(0.19, airFlowRate_FreeAir_M3s, 6);
+            Assert.Equal(ventilationUnitTemplate.MaximumSupplyFlowRate_Lps, airFlowRate_FreeAir_M3s * 1000, 6);
+
+            //And the duty points are NOT the capacity. 0.1 m3/s @ 100 Pa is the catalogue's own example
+            //selection - the number a reader is most likely to mistake for the unit's rating - and the 100 Pa
+            //column of this row is 0.17 m3/s, which is what the unit actually does there.
+            Assert.Equal(0.17, ventilationUnitPerformanceTable.PublishedValue("AirFlowRate", 2), 6);
+            Assert.NotEqual(100, ventilationUnitTemplate.MaximumSupplyFlowRate_Lps);
+            Assert.NotEqual(140, ventilationUnitTemplate.MaximumSupplyFlowRate_Lps);
+
+            //Traceable to the row it was read from, not merely to the catalogue in general.
+            Assert.Contains("Specific Fan Power", ventilationUnitTemplate.Source);
+            Assert.Contains("100% fan-speed row", ventilationUnitTemplate.Source);
+            Assert.Contains("0.19 m3/s = 190 l/s", ventilationUnitTemplate.Source);
+            Assert.Contains("is a duty point against duct resistance and is NOT the maximum", ventilationUnitTemplate.Source);
+        }
+
+        /// <summary>
+        /// The XBC15 performance row is the manufacturer's table, in the manufacturer's units. Airflow stays
+        /// in m3/s and specific fan power in W/l/s - neither is converted on the way in, because a converted
+        /// figure cannot be checked against the page it came from.
+        /// </summary>
+        [Fact]
+        public void TheXBC15PerformanceTable_IsTheManufacturerRowVerbatim()
+        {
+            VentilationUnitPerformanceTable ventilationUnitPerformanceTable = XBC15().PerformanceTable;
+
+            Assert.NotNull(ventilationUnitPerformanceTable);
+            Assert.True(ventilationUnitPerformanceTable.IsValid);
+
+            //One axis: the published pressure points, strictly increasing, in Pa.
+            Assert.Equal(1, ventilationUnitPerformanceTable.AxisCount);
+
+            VentilationUnitPerformanceAxis ventilationUnitPerformanceAxis = ventilationUnitPerformanceTable.Axis("ExternalStaticPressure");
+
+            Assert.NotNull(ventilationUnitPerformanceAxis);
+            Assert.Equal("Pa", ventilationUnitPerformanceAxis.Unit);
+            Assert.Equal(new double[] { 0, 50, 100, 200, 300, 400, 500, 600, 700 }, ventilationUnitPerformanceAxis.Values);
+            Assert.Equal(9, ventilationUnitPerformanceTable.PointCount);
+
+            VentilationUnitPerformanceOutput ventilationUnitPerformanceOutput_AirFlowRate = ventilationUnitPerformanceTable.Output("AirFlowRate");
+            VentilationUnitPerformanceOutput ventilationUnitPerformanceOutput_SpecificFanPower = ventilationUnitPerformanceTable.Output("SpecificFanPower");
+
+            Assert.NotNull(ventilationUnitPerformanceOutput_AirFlowRate);
+            Assert.NotNull(ventilationUnitPerformanceOutput_SpecificFanPower);
+
+            //THE UNITS THE SOURCE PRINTS, not SAM's preferred ones.
+            Assert.Equal("m3/s", ventilationUnitPerformanceOutput_AirFlowRate.Unit);
+            Assert.Equal("W/l/s", ventilationUnitPerformanceOutput_SpecificFanPower.Unit);
+
+            Assert.Equal(new double[] { 0.19, 0.18, 0.17, 0.15, 0.13, 0.11, 0.09, 0.07, 0.05 }, ventilationUnitPerformanceOutput_AirFlowRate.Values);
+            Assert.Equal(new double[] { 1.80, 1.82, 1.88, 2.13, 2.55, 3.15, 3.92, 4.87, 5.99 }, ventilationUnitPerformanceOutput_SpecificFanPower.Values);
+        }
+
+        /// <summary>
+        /// <b>The Iteration 3 boundary, asserted rather than assumed.</b> Nuaire publishes no cooling
+        /// module, no entering or external dry-bulb conditions, no supply air temperature, no heat exchanger
+        /// table and no controller ramp for the XBC range, and none was manufactured to make the two entries
+        /// look alike. A common performance model across the two products would have to invent every one of
+        /// these, and this test is what fails if somebody does.
+        /// </summary>
+        [Fact]
+        public void TheXBC15Entry_CarriesNoCoolingOrControlDataNobodyPublished()
+        {
+            VentilationUnitTemplate ventilationUnitTemplate = XBC15();
+
+            //No controller ramp. ABSENT is the legal "not supplied" state; a present-but-null key would have
+            //refused the whole catalogue, so the catalogue having loaded at all is half of this assertion.
+            Assert.Null(ventilationUnitTemplate.FlowFractionByControlTemperature);
+
+            VentilationUnitPerformanceTable ventilationUnitPerformanceTable = ventilationUnitTemplate.PerformanceTable;
+
+            Assert.DoesNotContain(VentilationUnitPerformanceAxis.Name_ExternalDryBulbTemperature, ventilationUnitPerformanceTable.AxisNames);
+            Assert.DoesNotContain(VentilationUnitPerformanceAxis.Name_EnteringDryBulbTemperature, ventilationUnitPerformanceTable.AxisNames);
+            Assert.DoesNotContain(VentilationUnitPerformanceAxis.Name_ControlTemperature, ventilationUnitPerformanceTable.AxisNames);
+
+            Assert.DoesNotContain(VentilationUnitPerformanceOutput.Name_SupplyAirTemperature, ventilationUnitPerformanceTable.OutputNames);
+            Assert.DoesNotContain(VentilationUnitPerformanceOutput.Name_CombinedCoolingCapacity, ventilationUnitPerformanceTable.OutputNames);
+
+            //The two products therefore publish DIFFERENT KINDS of performance data, and the catalogue holds
+            //each as its source states it. Only the MRXBOX has cooling and control data.
+            Assert.NotNull(Nuaire().FlowFractionByControlTemperature);
+            Assert.Contains(VentilationUnitPerformanceOutput.Name_CombinedCoolingCapacity, Nuaire().PerformanceTable.OutputNames);
+        }
+
+        /// <summary>
+        /// <b>The real 130 / 150 / 190 l/s ladder.</b>
+        /// <code>
+        /// duty 131/131   a 130 l/s product is INCAPABLE          -> MRXBOX 150, 19 l/s headroom
+        /// duty 150/150   MRXBOX exactly on its rating            -> MRXBOX 150,  0 l/s headroom
+        /// duty 160/160   MRXBOX incapable, XBC15 capable         -> XBC15  190, 30 l/s headroom
+        /// duty 190/190   XBC15 exactly on its rating             -> XBC15  190,  0 l/s headroom
+        /// duty 191/191   nothing offered can move it             -> refused, naming 190
+        /// </code>
+        /// <para>
+        /// The 130 l/s rung is a controlled descriptor rather than a shipped product: the Nuaire XBOXER
+        /// Universal sizes that would supply it in reality are SMALLER than the MRXBOX on both sides and
+        /// would change which product an existing project's dwellings select, so cataloguing them is its own
+        /// change. What is real here is the 150 -> 190 boundary, and it is the boundary this ladder turns on.
+        /// </para>
+        /// <para>
+        /// <b>Nothing is reduced to fit.</b> Every selection reports the duty it was asked for, unchanged;
+        /// the refusal reports no descriptor at all rather than the nearest undersized unit.
+        /// </para>
+        /// </summary>
+        [Fact]
+        public void TheRealLadder_RefusesUnder150_KeepsMRXBOXAt150_AndReachesXBC15Above()
+        {
+            List<VentilationUnitCapacityDescriptor> ventilationUnitCapacityDescriptors = Query.VentilationUnitCapacityDescriptors(Directory_Resources());
+
+            Assert.NotNull(ventilationUnitCapacityDescriptors);
+
+            VentilationUnitCapacityDescriptor ventilationUnitCapacityDescriptor_MRXBOX = Descriptor(ventilationUnitCapacityDescriptors, model_Nuaire);
+            VentilationUnitCapacityDescriptor ventilationUnitCapacityDescriptor_XBC15 = Descriptor(ventilationUnitCapacityDescriptors, model_XBC15);
+
+            //A real undersized case, offered alongside the two shipped products.
+            VentilationUnitCapacityDescriptor ventilationUnitCapacityDescriptor_130 = new(new VentilationUnitReference(manufacturer_Nuaire, "FIXTURE-UNDERSIZED-130", null), 130, 130, 32);
+
+            List<VentilationUnitCapacityDescriptor> ventilationUnitCapacityDescriptors_Ladder = [ventilationUnitCapacityDescriptor_130, .. ventilationUnitCapacityDescriptors];
+
+            //---- above 130: the 130 l/s product is not a candidate, and no duty is trimmed to make it one.
+            Assert.False(ventilationUnitCapacityDescriptor_130.IsSufficientFor(131, 131));
+            Assert.DoesNotContain(ventilationUnitCapacityDescriptor_130, Analytical.Query.CapableVentilationUnits(ventilationUnitCapacityDescriptors_Ladder, 131, 131));
+
+            VentilationUnitSelection ventilationUnitSelection_131 = Analytical.Query.SelectSmallestCapableVentilationUnit(ventilationUnitCapacityDescriptors_Ladder, 131, 131);
+
+            Assert.True(ventilationUnitSelection_131.IsSelected);
+            Assert.Equal(model_Nuaire, ventilationUnitSelection_131.VentilationUnitReference.Model);
+            Assert.Equal(131, ventilationUnitSelection_131.SupplyDuty_Lps, 6);
+            Assert.Equal(19, ventilationUnitSelection_131.SupplyHeadroom_Lps, 6);
+
+            //---- 150: the existing accepted behaviour, unchanged by the XBC15 being on offer.
+            VentilationUnitSelection ventilationUnitSelection_150 = Analytical.Query.SelectSmallestCapableVentilationUnit(ventilationUnitCapacityDescriptors_Ladder, 150, 150);
+
+            Assert.True(ventilationUnitSelection_150.IsSelected);
+            Assert.Equal(model_Nuaire, ventilationUnitSelection_150.VentilationUnitReference.Model);
+            Assert.Equal(0, ventilationUnitSelection_150.SupplyHeadroom_Lps, 6);
+            Assert.Equal(0, ventilationUnitSelection_150.ExtractHeadroom_Lps, 6);
+
+            //The XBC15 is capable at 150 and is NOT chosen, because it is larger on both sides. Smallest
+            //compliant, never largest available.
+            Assert.True(ventilationUnitCapacityDescriptor_XBC15.IsSufficientFor(150, 150));
+            Assert.True(ventilationUnitCapacityDescriptor_MRXBOX.Size_Lps < ventilationUnitCapacityDescriptor_XBC15.Size_Lps);
+
+            //---- 160: the real manufacturer boundary. THE point of adding a second product.
+            Assert.False(ventilationUnitCapacityDescriptor_MRXBOX.IsSufficientFor(160, 160));
+
+            VentilationUnitSelection ventilationUnitSelection_160 = Analytical.Query.SelectSmallestCapableVentilationUnit(ventilationUnitCapacityDescriptors_Ladder, 160, 160);
+
+            Assert.True(ventilationUnitSelection_160.IsSelected);
+            Assert.Equal(model_XBC15, ventilationUnitSelection_160.VentilationUnitReference.Model);
+            Assert.Equal(160, ventilationUnitSelection_160.SupplyDuty_Lps, 6);
+            Assert.Equal(30, ventilationUnitSelection_160.SupplyHeadroom_Lps, 6);
+
+            //---- 190: exactly on the XBC15's rating is sufficient, not a rounding failure.
+            VentilationUnitSelection ventilationUnitSelection_190 = Analytical.Query.SelectSmallestCapableVentilationUnit(ventilationUnitCapacityDescriptors_Ladder, 190, 190);
+
+            Assert.True(ventilationUnitSelection_190.IsSelected);
+            Assert.Equal(model_XBC15, ventilationUnitSelection_190.VentilationUnitReference.Model);
+            Assert.Equal(0, ventilationUnitSelection_190.SupplyHeadroom_Lps, 6);
+
+            //---- above 190: refused, and the reason says how far short the catalogue fell.
+            VentilationUnitSelection ventilationUnitSelection_191 = Analytical.Query.SelectSmallestCapableVentilationUnit(ventilationUnitCapacityDescriptors_Ladder, 191, 191);
+
+            Assert.False(ventilationUnitSelection_191.IsSelected);
+            Assert.Null(ventilationUnitSelection_191.Descriptor);
+            Assert.Contains("190", ventilationUnitSelection_191.Reason);
+            Assert.Contains("an undersized unit is not an answer", ventilationUnitSelection_191.Reason);
+        }
+
+        /// <summary>
+        /// Each shipped product's identity survives a serialization round trip and resolves back to its own
+        /// template - and the two never match each other. Identity is what the model stores and what
+        /// performance data is looked up by later, so a collision would make the model's own record
+        /// ambiguous.
+        /// </summary>
+        [Fact]
+        public void TheTwoShippedIdentities_RoundTripAndNeverCollide()
+        {
+            List<VentilationUnitTemplate> ventilationUnitTemplates = Query.VentilationUnitTemplates(Directory_Resources());
+
+            VentilationUnitReference ventilationUnitReference_MRXBOX = Nuaire().VentilationUnitReference;
+            VentilationUnitReference ventilationUnitReference_XBC15 = XBC15().VentilationUnitReference;
+
+            Assert.False(ventilationUnitReference_MRXBOX.Matches(ventilationUnitReference_XBC15));
+            Assert.False(ventilationUnitReference_XBC15.Matches(ventilationUnitReference_MRXBOX));
+
+            foreach (VentilationUnitReference ventilationUnitReference in new[] { ventilationUnitReference_MRXBOX, ventilationUnitReference_XBC15 })
+            {
+                VentilationUnitReference ventilationUnitReference_RoundTripped = new(ventilationUnitReference.ToJsonObject());
+
+                Assert.Equal(ventilationUnitReference.Manufacturer, ventilationUnitReference_RoundTripped.Manufacturer);
+                Assert.Equal(ventilationUnitReference.Model, ventilationUnitReference_RoundTripped.Model);
+                Assert.Equal(ventilationUnitReference.Reference, ventilationUnitReference_RoundTripped.Reference);
+                Assert.True(ventilationUnitReference.Matches(ventilationUnitReference_RoundTripped));
+
+                //And it still finds its own template, by identity, in the catalogue it came from.
+                VentilationUnitTemplate ventilationUnitTemplate = Analytical.Query.MatchingVentilationUnitTemplate(ventilationUnitTemplates, ventilationUnitReference_RoundTripped);
+
+                Assert.NotNull(ventilationUnitTemplate);
+                Assert.Equal(ventilationUnitReference.Model, ventilationUnitTemplate.VentilationUnitReference.Model);
+            }
+        }
+
+        /// <summary>
+        /// <b>Fail-closed still means the WHOLE catalogue.</b> With two products in the file, one unusable
+        /// entry must still refuse everything rather than quietly returning the good one - a product
+        /// silently vanishing from a library is the failure mode that produces a smaller answer nobody
+        /// notices, and it gets easier to miss the more products there are.
+        /// </summary>
+        [Fact]
+        public void AnUnusableSecondEntry_StillRefusesTheWholeCatalogue()
+        {
+            string directory = TemporaryCatalogue_TwoEntriesSecondUnusable();
+
+            try
+            {
+                //The FIRST entry is perfectly good and is still not returned.
+                Assert.Null(Query.VentilationUnitTemplates(directory));
+                Assert.Null(Query.VentilationUnitCapacityDescriptors(directory));
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        // =================================================================================================
         // Fixtures
         // =================================================================================================
 
+        /// <summary>
+        /// The shipped Nuaire MRXBOX entry, resolved by PRODUCT IDENTITY rather than by being the only thing
+        /// in the file. The catalogue holds more than one product now, and a fixture that took the first or
+        /// the only entry would either break or, worse, silently start asserting a different product's
+        /// figures the day the file grows again. Asserted to appear EXACTLY once, which is the invariant the
+        /// reader's own duplicate-identity gate exists to protect.
+        /// </summary>
+        /// <summary>One offered product by model, and the assertion that exactly one answers to it.</summary>
+        private static VentilationUnitCapacityDescriptor Descriptor(List<VentilationUnitCapacityDescriptor> ventilationUnitCapacityDescriptors, string model)
+        {
+            Assert.NotNull(ventilationUnitCapacityDescriptors);
+
+            VentilationUnitCapacityDescriptor result = Assert.Single(ventilationUnitCapacityDescriptors.FindAll(
+                x => x?.VentilationUnitReference is not null && string.Equals(x.VentilationUnitReference.Model, model, StringComparison.Ordinal)));
+
+            Assert.NotNull(result);
+
+            return result;
+        }
+
+        /// <summary>
+        /// Two entries where the first is valid and the second has no <c>Rank</c> - one of the reader's own
+        /// refusal gates, chosen because it is the one a hand-added product is most likely to forget.
+        /// </summary>
+        private static string TemporaryCatalogue_TwoEntriesSecondUnusable()
+        {
+            string directory = Path.Combine(Path.GetTempPath(), "SAM_VentilationUnitCatalogue_" + Guid.NewGuid().ToString("N"));
+
+            Directory.CreateDirectory(directory);
+
+            string entries = Entry("FIXTURE-GOOD-150", "150", "150") + "," + Entry("FIXTURE-NO-RANK-190", "190", "190", rank: null);
+
+            File.WriteAllText(
+                Path.Combine(directory, Query.VentilationUnitCatalogueFileName),
+                "{ \"Schema\": \"VentilationUnitCatalogue:v1\", \"Templates\": [" + entries + "] }");
+
+            return directory;
+        }
+
         private static VentilationUnitTemplate Nuaire()
+        {
+            return Shipped(model_Nuaire);
+        }
+
+        /// <summary>The shipped Nuaire XBOXER XBC15 entry, resolved the same way.</summary>
+        private static VentilationUnitTemplate XBC15()
+        {
+            return Shipped(model_XBC15);
+        }
+
+        /// <summary>
+        /// One shipped product by model, and the assertion that the catalogue names it once.
+        /// </summary>
+        private static VentilationUnitTemplate Shipped(string model)
         {
             List<VentilationUnitTemplate> ventilationUnitTemplates = Query.VentilationUnitTemplates(Directory_Resources());
 
             Assert.NotNull(ventilationUnitTemplates);
 
-            VentilationUnitTemplate result = Assert.Single(ventilationUnitTemplates);
+            List<VentilationUnitTemplate> ventilationUnitTemplates_Matching = ventilationUnitTemplates.FindAll(
+                x => x?.VentilationUnitReference is not null && string.Equals(x.VentilationUnitReference.Model, model, StringComparison.Ordinal));
+
+            VentilationUnitTemplate result = Assert.Single(ventilationUnitTemplates_Matching);
 
             Assert.NotNull(result);
 

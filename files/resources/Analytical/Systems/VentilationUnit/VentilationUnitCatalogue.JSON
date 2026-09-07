@@ -31,8 +31,9 @@
     "holds.",
     "",
     "RANK IS DECLARED LIBRARY POLICY. Lower is preferred, and it is ONLY a tie-break between products that",
-    "are the same size on both sides - size decides first. It is not derived from anything. The single",
-    "value below is provisional and orders nothing today.",
+    "are the same size on both sides - size decides first. It is not derived from anything. The values",
+    "below are declared in size bands per manufacturer range - 10 the domestic hybrid unit, 20s the XBC",
+    "commercial range - and order nothing today, because no two entries here are the same size.",
     "",
     "FlowFractionByControlTemperature is the CONTROLLER ramp, carried as template data so that no generic",
     "air handling unit algorithm anywhere holds a hard-coded 22 or 26. Its own PerformanceDomainPolicy is",
@@ -40,7 +41,31 @@
     "saturating statement rather than an assumption.",
     "",
     "WHICH TEMPERATURE drives that controller, where one unit serves several rooms whose temperatures",
-    "differ, is an Iteration 3 control question. NOTHING HERE ANSWERS IT."
+    "differ, is an Iteration 3 control question. NOTHING HERE ANSWERS IT.",
+    "",
+    "COMMERCIAL ENTRY (added 2026-09). The XBC15 capacity is the free-air (0 Pa external static pressure)",
+    "endpoint of the 100% fan-speed row of the catalogue's own published Specific Fan Power table - the same",
+    "reasoning as the domestic entry above, stated numerically in the source table rather than digitised from",
+    "a chart. Its PerformanceTable is that same 100% row verbatim: AirFlowRate and SpecificFanPower over the",
+    "published external-static-pressure points, in the units the source prints them in (m3/s and W/l/s) and",
+    "never converted on the way in. The catalogue's example selection, 0.1 m3/s @ 100 Pa, is a DUTY POINT",
+    "against duct resistance and is not the capacity; nor is the 75% fan-speed row, which is an operating",
+    "state of the same physical unit. The part-load 75/50/25% rows are RAGGED in the source - each stops at a",
+    "different pressure - and a PerformanceTable is a rectangular grid of strictly increasing numeric axes, so",
+    "those rows are excluded from the table rather than interpolated or trimmed, and are preserved in the",
+    "entry's Source text together with the per-speed dBA@3m sound levels.",
+    "",
+    "NO COOLING-MODULE OR CONTROL DATA APPEARS ON THE XBC15 ENTRY. Nuaire publishes no external or entering",
+    "dry-bulb conditions, no cooling capacity, no supply air temperature, no heat-exchanger performance table",
+    "and no controller ramp for the XBC range, and none was invented here. FlowFractionByControlTemperature is",
+    "therefore ABSENT on that entry - the legal 'data not supplied' state - and is never written as null,",
+    "which would refuse the whole catalogue.",
+    "",
+    "XBC15 IS LARGER THAN THE DOMESTIC UNIT ON BOTH SIDES, 190/190 against 150/150, so it is never the",
+    "smallest capable product at a duty the MRXBOX can also carry; it becomes selectable only above 150 l/s.",
+    "The smaller XBOXER Universal sizes (UNI-X220/360/580) are deliberately NOT here: they are SMALLER than",
+    "the MRXBOX and would change which product an existing project's dwellings select. Adding them is its own",
+    "change, with its own acceptance."
   ],
   "Templates": [
     {
@@ -335,6 +360,75 @@
           ]
         },
         "PerformanceDomainPolicy": "ClampToDomain"
+      }
+    },
+    {
+      "_type": "SAM.Analytical.VentilationUnitTemplate,SAM.Analytical",
+      "Name": "Nuaire XBOXER XBC15",
+      "VentilationUnitReference": {
+        "_type": "SAM.Analytical.VentilationUnitReference,SAM.Analytical",
+        "Name": "Nuaire XBC15",
+        "Manufacturer": "Nuaire",
+        "Model": "XBC15"
+      },
+      "Source": "Nuaire, XBOXER XBC Heat Recovery Solutions catalogue, document 029 2085 82002 (2024 edition, info.nuaire.co.uk/catalogue/CommercialHeatRecovery-XBOXER-XBC_2024.pdf), page 18 - XBC15 HORIZONTAL HEAT EXCHANGE UNITS, unit performance. MaximumSupplyFlowRate_Lps/MaximumExtractFlowRate_Lps are the free-air (0 Pa external static pressure) airflow of the 100% fan-speed row of the published Specific Fan Power table: 0.19 m3/s = 190 l/s. The table is headed 'Specific Fan Power (Both fans operating)' and the unit is a balanced counterflow plate heat exchange unit publishing one combined air volume flow rate, so the same figure serves both directions - the same free-air-endpoint reasoning as the MRXBOXAB-ECO5-AECV entry, stated numerically in the source table rather than digitised from a chart. The catalogue's example selection, 0.1 m3/s @ 100 Pa (SFP 1.1, 17 dBA @ 3 m), is a duty point against duct resistance and is NOT the maximum; nor is the 75% fan-speed row (0.14 m3/s at 0 Pa), which is an operating state of the same physical unit. 230 V / 1 phase / 50 Hz, 340 W input without heater, fan speed 4000 rpm, unit weight 187 kg. Heat exchanger performance is published as curves only, so nothing of it is carried. The PerformanceTable is the 100% fan-speed row of this same Specific Fan Power table, verbatim: ExternalStaticPressure 0/50/100/200/300/400/500/600/700 Pa against AirFlowRate 0.19/0.18/0.17/0.15/0.13/0.11/0.09/0.07/0.05 m3/s and SpecificFanPower 1.80/1.82/1.88/2.13/2.55/3.15/3.92/4.87/5.99 W/l/s (both fans operating; the page's performance curve is ISO 5801:2007 / AMCA 300, Type D, air density 1.2 kg/m3). The 75/50/25% fan-speed rows of the same table are published RAGGED - 75% tabulates 0-500 Pa, 50% 0-200 Pa, 25% 0-50 Pa - and the schema is a rectangular grid of strictly increasing numeric axes, so holding them would mean interpolating or dropping published points, which this file's raw-data rule forbids; they, and the per-speed dBA@3m (26/20/<20/<20), stay in the catalogue page cited above. No controller ramp is published, so FlowFractionByControlTemperature is absent.",
+      "MaximumSupplyFlowRate_Lps": 190,
+      "MaximumExtractFlowRate_Lps": 190,
+      "Rank": 20,
+      "PerformanceTable": {
+        "_type": "SAM.Analytical.VentilationUnitPerformanceTable,SAM.Analytical",
+        "Axes": [
+          {
+            "_type": "SAM.Analytical.VentilationUnitPerformanceAxis,SAM.Analytical",
+            "Name": "ExternalStaticPressure",
+            "Unit": "Pa",
+            "Values": [
+              0.0,
+              50.0,
+              100.0,
+              200.0,
+              300.0,
+              400.0,
+              500.0,
+              600.0,
+              700.0
+            ]
+          }
+        ],
+        "Outputs": [
+          {
+            "_type": "SAM.Analytical.VentilationUnitPerformanceOutput,SAM.Analytical",
+            "Name": "AirFlowRate",
+            "Unit": "m3/s",
+            "Values": [
+              0.19,
+              0.18,
+              0.17,
+              0.15,
+              0.13,
+              0.11,
+              0.09,
+              0.07,
+              0.05
+            ]
+          },
+          {
+            "_type": "SAM.Analytical.VentilationUnitPerformanceOutput,SAM.Analytical",
+            "Name": "SpecificFanPower",
+            "Unit": "W/l/s",
+            "Values": [
+              1.80,
+              1.82,
+              1.88,
+              2.13,
+              2.55,
+              3.15,
+              3.92,
+              4.87,
+              5.99
+            ]
+          }
+        ]
       }
     }
   ]
