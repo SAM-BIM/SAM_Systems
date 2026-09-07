@@ -1,24 +1,185 @@
 # Project Progress
 
 ## Branch
-The ventilation unit catalogue feature itself is **merged**: `feature/parto-iteration2-ventilation-unit-catalogue`
-went in as PR #15 (`32fff611`), onto `SAM-BIM/SAM_Systems` `sow/2026-Q3`, after the SAM manufacturer-catalogue
-dependency below merged first. Its late-P2 hardening follow-up, PR #16, is also **merged** (`e444982`).
+`feature/parto-catalogue-xbc15`, branched from `sow/2026-Q3` at **`fea5055`** (the merge of PR #18).
 
-Current work is **Grasshopper Seam 1**, `feature/parto-iteration2-gh-ventilation-catalogue`, cut from the
-current `sow/2026-Q3` (`e444982`) - see the *Grasshopper Seam 1* section below. Raised as a PR against
-`sow/2026-Q3`. **Not merged yet.**
+**Stands alone.** It needs no change in `SAM`, `SAM_UI`, `SAM_Tas` or any other dependency: no production
+code changed in this repository at all. Baseline it was branched from, measured before any edit:
 
-**Companion branch in `SAM-BIM/SAM`**: `feature/parto-iteration2-gh-equipment-selection`, off SAM's
-`sow/2026-Q3` at `45429237`. Deliberately not a code dependency in either direction - `SAM.Analytical`
-still does not reference `SAM.Analytical.Systems` - the two components are wired together only on a
-Grasshopper canvas, and either PR can merge independently of the other.
+```text
+SAM.Analytical.Systems.Tests            83/83
+```
+
+Companion, test-only branches exist in `SAM` (`test/parto-real-selection-ladder`) and `SAM_UI`
+(`test/parto-xbc15-capacity-ceiling`). None is a code dependency in either direction; each can merge
+independently.
+
+Everything below the *Latest* entry is superseded history retained for context.
 
 ## Last updated
-2026-08-31 (Grasshopper Seam 1) - a new SAM_Systems Grasshopper component exposes the existing catalogue
-query to Grasshopper, paired with a new optional input/outputs on SAM's existing
-`SAMAnalyticalPreparePartOIteration` component. No new selection logic anywhere: both sides read data the
-core libraries already compute.
+2026-09-07 - The catalogue holds a second real product: **Nuaire XBOXER XBC15, 190/190 l/s**. Data and tests
+only; no production code changed. The 150 -> 190 l/s selection boundary is now a manufacturer fact rather
+than a fixture, and automatic selection at every duty <= 150 l/s is provably unchanged.
+
+## Latest (2026-09-07): the second real product - Nuaire XBOXER XBC15
+
+**Status: implemented and tested. Not merged. Do not merge automatically.**
+
+### What was added, and what it is
+
+One entry, appended to `files/resources/Analytical/Systems/VentilationUnit/VentilationUnitCatalogue.JSON`:
+
+| Field | Value |
+| --- | --- |
+| Identity | `Nuaire` / `XBC15` / *(no reference - the range has no cooling module)* |
+| `MaximumSupplyFlowRate_Lps` / `MaximumExtractFlowRate_Lps` | **190** / **190** |
+| `Rank` | 20 |
+| `PerformanceTable` | 1 axis, `ExternalStaticPressure` 0/50/100/200/300/400/500/600/700 Pa; outputs `AirFlowRate` in **m3/s** and `SpecificFanPower` in **W/l/s** |
+| `FlowFractionByControlTemperature` | **absent** - not `null` |
+
+Source: Nuaire, XBOXER XBC Heat Recovery Solutions catalogue, document 029 2085 82002 (2024 edition),
+page 18 - XBC15 horizontal heat exchange units, unit performance.
+
+**THE CAPACITY IS THE FREE-AIR END OF THE PUBLISHED FAN ROW.** The catalogue tabulates a Specific Fan Power
+table (both fans operating) whose 100% fan-speed row runs against external static pressure; its 0 Pa end is
+0.19 m3/s = 190 l/s. That is the flow the unit delivers against no external resistance, which is what a
+capacity is. Same reasoning as the MRXBOX entry, except this source states it numerically instead of drawing
+it on a chart, so nothing was digitised.
+
+**AND THE DUTY POINTS ARE NOT.** The catalogue's own example selection, 0.1 m3/s @ 100 Pa (SFP 1.1,
+17 dBA @ 3 m), is a duty point against duct resistance. The 75% fan-speed row's 0.14 m3/s at 0 Pa is an
+operating state of the same physical unit. Neither is a product and neither is a rating.
+`TheXBC15Capacity_IsTheFreeAirEndOfItsPublishedFanRow` asserts the capacity equals the table's own 0 Pa entry
+and is neither of those two numbers.
+
+**Note the asymmetry with the MRXBOX test, which is deliberate.** For the MRXBOX the capacity had to differ
+from everything on its performance table, because that table is a grid of cooling duty points and its
+largest airflow (120 l/s) is not a fan limit -
+`TheNuaireCapacity_IsResolvedFromTheFanCurveNotTheTablesLargestAirflow` still asserts exactly that. For the
+XBC15 the capacity *is* the table's 0 Pa entry, because that table is the fan row. Writing a
+"capacity != table maximum" assertion here would have been a false invariant.
+
+### Raw data, in the source's own units
+
+`AirFlowRate` stays in **m3/s** and `SpecificFanPower` in **W/l/s**. Nothing is converted on the way in,
+because a converted figure cannot be checked against the page it came from - the rule this file has followed
+since PR #15. The 75/50/25% fan-speed rows are published **ragged** (75% to 500 Pa, 50% to 200 Pa, 25% to
+50 Pa) and a `VentilationUnitPerformanceTable` is a rectangular grid of strictly increasing numeric axes, so
+holding them would mean interpolating or dropping published points. They stay in the catalogue page cited in
+the entry's `Source`, together with the per-speed dBA@3m (26/20/<20/<20).
+
+### The Iteration 3 boundary - nothing was invented to make the two entries match
+
+Nuaire publishes no external or entering dry-bulb conditions, no cooling capacity, no supply air temperature,
+no heat-exchanger performance table and no controller ramp for the XBC range. None was manufactured.
+`FlowFractionByControlTemperature` is therefore **absent** - the legal "data not supplied" state - and never
+written as `null`, which is malformed and refuses the whole catalogue.
+
+`TheXBC15Entry_CarriesNoCoolingOrControlDataNobodyPublished` is the test that fails if somebody later
+manufactures a common performance model across the two products. The two entries carry **different kinds** of
+manufacturer data on purpose, and the catalogue holds each as its source states it.
+
+### Why only this one, of the nine products offered
+
+Selection is smallest-capable, ordered by `Size_Lps = supply + extract`. The XBC15 is size 380 against the
+MRXBOX's 300, so **automatic selection is unchanged at every duty <= 150 l/s** - the MRXBOX still wins - and
+the XBC15 becomes selectable only in the new 150-190 l/s band. No Iteration 2 native re-acceptance is owed.
+
+The XBOXER Universal sizes would not have that property. UNI-X220 is 68/68 (size 136) and UNI-X580 is
+130/130 (size 260), both **smaller** than the MRXBOX and both capable at the project's 30/30 and 63/63 l/s
+dwelling duties, so shipping them would re-select the live project's plant downward, drop the Iteration 2B
+ceiling from 150 to 68 l/s, and invalidate the licensed acceptance run of 2026-09-01. XBC25/55/65/75/85 are
+larger still and order nothing today, but belong with them. All eight are deferred to their own change with
+its own acceptance. The 130 l/s undersized rung is therefore proved with a controlled descriptor rather than
+a shipped product, and the tests say so.
+
+### The one thing that had to be checked before anything else
+
+That a **1-axis** table with `m3/s` / `W/l/s` outputs validates at all - the reader's grid rules were written
+against a 3-axis degC/degC/l/s table. It does, unmodified. **No validation was weakened anywhere**, and the
+fail-closed rule is unchanged: `AnUnusableSecondEntry_StillRefusesTheWholeCatalogue` adds the two-product
+case - a good first entry and a second with no `Rank` refuses everything rather than quietly returning the
+good one.
+
+### Tests
+
+`SAM.Analytical.Systems.Tests/VentilationUnitCatalogueTests.cs`, **83 -> 90**.
+
+**Repaired, not relaxed.** The file assumed a single-entry catalogue in six places. The `Nuaire()` fixture now
+resolves the MRXBOX by **product identity** through a shared `Shipped(model)` helper that still asserts the
+catalogue names it exactly once - so all eight call sites keep their assertions unchanged - and a sibling
+`XBC15()` fixture reads the new entry the same way. Three `Assert.Single` calls over the shipped catalogue
+became identity lookups plus an explicit `count_ShippedProducts` check, so a test that means "this one
+product" can no longer be confused with a test that means "the whole catalogue".
+
+`ADutyWithinTheFanCurveMaximum_SelectsNuaire_AboveItRefuses` needed **no change**: 100/100 still selects the
+MRXBOX with 50 l/s of headroom, and 200/200 is still refused, because 200 is past the XBC15 too.
+
+Seven new, in a new section K:
+
+- `TheShippedCatalogue_HoldsBothNuaireProducts` - two entries, both identities, 150/150 and 190/190, ranks 10
+  and 20, nothing unselectable, and the note that rank decides nothing here because size separates them first.
+- `TheXBC15Capacity_IsTheFreeAirEndOfItsPublishedFanRow` - above.
+- `TheXBC15PerformanceTable_IsTheManufacturerRowVerbatim` - all nine pressure points and all eighteen output
+  values, in the source's units.
+- `TheXBC15Entry_CarriesNoCoolingOrControlDataNobodyPublished` - above.
+- `TheRealLadder_RefusesUnder150_KeepsMRXBOXAt150_AndReachesXBC15Above` - the 130/150/190 ladder against the
+  shipped descriptors: above 130 a 130 l/s product is not a candidate and no duty is trimmed to fit; at
+  150/150 the MRXBOX with zero headroom, the XBC15 capable and not chosen; at 160/160 the MRXBOX incapable
+  and the XBC15 selected with 30 l/s headroom; at 190/190 exactly on the rating; at 191/191 refused, naming
+  190.
+- `TheTwoShippedIdentities_RoundTripAndNeverCollide` - each identity survives serialization, resolves back to
+  its own template by identity, and never matches the other.
+- `AnUnusableSecondEntry_StillRefusesTheWholeCatalogue` - above.
+
+Section J's controlled two-product fixture **stays**. The separation recorded at PR #17 still holds: the
+shipped catalogue states what the manufacturers published, and the algorithm is tested against fixtures built
+for the purpose. What section K adds is the assertion that what the *file* says reaches that algorithm.
+
+### Deployment - closed, with evidence
+
+No new mechanism. The unconditional post-build `xcopy` in
+`Grasshopper/SAM.Analytical.Grasshopper.Systems/SAM.Analytical.Grasshopper.Systems.csproj` copies the whole
+`files/resources` tree, so the new entry rides along exactly as `SystemEnergyCentre/CapabilityIndex.JSON`
+does. Verified on this machine after `dotnet build SAM_Systems.sln -c Release`: the complete two-entry
+catalogue is **byte-identical to the repository source** (18,207 bytes, md5
+`19e7b9a63ed09ccf9555ba7c9d395adb`) at both
+
+```text
+%APPDATA%\SAM\resources\Analytical\Systems\VentilationUnit\VentilationUnitCatalogue.JSON
+%USERPROFILE%\Documents\SAM\resources\Analytical\Systems\VentilationUnit\VentilationUnitCatalogue.JSON
+```
+
+and both read back two templates through the runtime resolver. The machine-independent path assertions
+(`TheCatalogue_SitsWhereTheRuntimeResolverWillLookForIt`, `TheReaderAndTheShippedFile_AgreeOnTheFileName`,
+`ALegacyPersistedSetting_StillResolvesTheShippedCatalogue`) are unchanged and still pass.
+
+### Validation
+
+| Suite / build | Result |
+| --- | --- |
+| `VentilationUnitCatalogueTests` (focused, incl. 7 new) | **50 / 50** |
+| `SAM.Analytical.Systems.Tests` (full) | **90 / 90** (was 83) |
+| `dotnet build SAM_Systems.sln -c Release` | **0 errors** |
+| `git diff --check` | clean |
+
+Sibling repositories at these SHAs: `SAM` `c980d4c`, `SAM_UI` `8219416`, `SAM_Tas` `ec7f505`. The `SAM` and
+`SAM_UI` companion branches are **test-only** and neither is required for this one to build or pass.
+
+Note for anyone re-running this locally: `./test.ps1` runs only the Mollier tests and will pass without
+executing a single ventilation-catalogue test. Invoke the test project directly.
+
+### Issues / blockers
+
+- None known.
+
+### Next step
+
+- Human review, then merge. **Do not merge automatically.**
+- The eight deferred products (XBC25/55/65/75/85, UNI-X220/360/580) are their own change, and the UNI-X sizes
+  need Iteration 2 native re-acceptance because they are smaller than the MRXBOX.
+
+## Superseded (2026-09-01): the first product, and everything the catalogue seam was built for
 
 ## Current status
 
