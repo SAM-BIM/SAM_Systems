@@ -1,6 +1,20 @@
 # Project Progress
 
 ## Branch
+`part-o/iteration3-systems-materialisation`, branched from `sow/2026-Q3` at **`9e1cd06`**.
+
+Baseline measured before any edit, on that tip:
+
+```text
+SAM.Analytical.Systems.Tests             90/90
+SAM.Analytical.Systems.Mollier.Tests   123/123
+dotnet build SAM_Systems.sln -c Release   0 errors
+```
+
+Sibling `SAM` at `sow/2026-Q3` **`413215c`**, rebuilt so this repository references current binaries.
+**No `SAM` production file is touched by this branch.**
+
+Superseded branch note, retained for context:
 `feature/parto-catalogue-xbc15`, branched from `sow/2026-Q3` at **`fea5055`** (the merge of PR #18).
 
 **Stands alone.** It needs no change in `SAM`, `SAM_UI`, `SAM_Tas` or any other dependency: no production
@@ -17,6 +31,81 @@ independently.
 Everything below the *Latest* entry is superseded history retained for context.
 
 ## Last updated
+2026-09-09 - **PR1 of Part O Iteration 3 (SAM #111): generic deterministic mechanical-ventilation
+materialisation.** See *Latest* immediately below.
+
+## Latest (2026-09-09): PR1 - mechanical-ventilation materialisation
+
+`Create.MechanicalVentilation(this AdjacencyCluster, SystemEnergyCentre template, MechanicalVentilationSettings, IEnumerable<Space>)`
+turns the ventilation an analytical design already states into an isolated, deterministic
+`SystemEnergyCentre` built on a supplied topology template.
+
+**The shape.** One energy centre -> **one** materialised plant room -> **N air systems, one per physical
+analytical air handling unit**, each with its own deterministically re-keyed copy of the template's
+air-system subgraph. The non-air plant - the electrical, hot water, heating, cooling and refrigerant
+collections and the liquid side - is **shared, not copied per unit**. `SystemEnergyCentre.Add(plantRoom)`
+is called **exactly once** for the whole materialisation: the energy centre keys plant rooms by guid, so
+a per-unit `Add` would silently replace the previous one and lose an entire air system.
+
+**Design airflow is the only airflow authority.** The design duty of a direction is the **sum** of that
+space's design terminals of that direction - a bedroom subdivided into 7 + 8 + 15 l/s has one 30 l/s
+supply leg. A Part F requirement, a selected product's capacity and an operating airflow are three other
+numbers and none of them is read; two tests prove it structurally, by materialising with and without them
+and comparing the graphs byte for byte. The new generic
+`SystemConnectionParameter.DesignFlowRate` [l/s] carries design airflow and is never overloaded.
+
+**Membership and bindings are guids and relations, never names.** The one name read anywhere is
+`VentilationSystemParameter.SupplyUnitName`/`ExhaustUnitName`, resolved **once** through an index to
+locate the `AirHandlingUnit` object - the model's own pre-existing binding, which SAM's own accessor
+records as debt. That resolution is **stricter** than SAM's: a missing name, an unresolved name, a name
+two units answer to, and supply and exhaust naming different units all **refuse**, where the shipped
+`Find` silently takes the first match. After resolution `AirHandlingUnit.Guid` is the sole authority.
+
+**Fail closed, with no partial-success graph.** `MechanicalVentilationMaterialisation.SystemEnergyCentre`
+is null whenever `Refusals` is non-empty, enforced in the constructor rather than by convention.
+
+**Deterministic identity.** `Query.MechanicalVentilationGuid` reuses `OverheatingScenario.Derive`'s
+convention verbatim - namespace guid, schema, length-prefixed NFC components, SHA-256, version 8 - with
+its own namespace and `IdentitySchema = "MechanicalVentilationMaterialisation:v1"`, pinned by a test. No
+`Guid.NewGuid()` for any generated identity, and a collision map refuses rather than letting
+`RelationCluster.TryAddObject` silently replace an entry. The **one stated exception** is the plant room,
+which **inherits** the template's guid: re-keying it through `new SystemPlantRoom(guid, …)` would
+silently downgrade a `DisplaySystemPlantRoom` to a plain one and lose its schematic routing, and it has
+no analytical source object so it is outside the lineage contract. `Modify/Merge.cs:47` re-guids a plant
+room on the way in, so this cannot lose one downstream.
+
+**Lineage is one row per contributing source, not one per materialised object.** All three terminals of a
+subdivided room bind to the one connection they produced (N:1), because a caller has to be able to trace
+a duty back to the terminals that made it. Completeness is asserted both ways.
+
+**Two narrow defects fixed, both in this repository:**
+
+* `YearlySchedule(YearlySchedule)` copied **24** of 8760 values. Live in `Modify/Merge.cs:289` and both
+  `ScheduleModifier` constructors via `Core.Query.Clone`, so an annual operating schedule of constant 1.0
+  silently became one day of operation and every stage downstream reported success. Test written first
+  and **observed failing** on current production source (hour 24 read 0.0 instead of 25) across the copy
+  constructor, `Core.Query.Clone`, `ScheduleModifier` and `Modify.Merge`, with the JSON round trip
+  passing as the control. Fixed to the full array length; all five pass.
+* `SystemSpace`'s two copy constructors **shared** `FlowRate`/`FreshAir` where every sibling component
+  clones them, and `SizedFlowValue.Value` has a public setter that `Modify.UpdateSpaceAirflows` writes in
+  place. Hardened to `?.Clone()`, gated on a green full regression as the plan required - **kept**, since
+  145/145 and 123/123 stayed green. The materialisation does not depend on it: it assigns brand-new flow
+  values to every room it builds.
+
+**Scaling.** Structural rather than wall-clock, following this repository's own recorded decision to
+delete its stopwatch test. At 100 / 1 000 / 5 000 spaces (5 rooms per dwelling, 20 dwellings per unit, so
+the 5 000-space run exercises 50 air systems, 4 000 terminals and 4 000 movements) every object count is
+an exact closed-form function of the input; the shared collection count does not grow with unit count;
+allocation grows linearly (ratio asserted under 8, linear is about 5 and quadratic about 25); and the
+5 000-space model with every space and terminal name blanked produces the **same identities**, which a
+name-scanning implementation could not.
+
+**Not in PR1**, and deliberately: any `SAM` production change; SAM_Tas; SAM_UI; TAS/TPD/TBD/TSD; the
+no-IZAM source; `ZoneTemperature`; the ResultantTemperature bridge; TM59; manufacturer behaviour; and any
+modification of the shipped `MV.json`, which is a topology source and is proved byte- and
+timestamp-unchanged by a test.
+
+## Superseded (2026-09-07) - the catalogue's second real product
 2026-09-07 - The catalogue holds a second real product: **Nuaire XBOXER XBC15, 190/190 l/s**. Data and tests
 only; no production code changed. The 150 -> 190 l/s selection boundary is now a manufacturer fact rather
 than a fixture, and automatic selection at every duty <= 150 l/s is provably unchanged.
@@ -601,6 +690,43 @@ Part F
   duty to be calculated by the unchanged network, the smallest capable unit selected (150 l/s for a duty
   above 100), that reference to appear in `ventilationUnitSelections`/on the analytical AHU, and
   `ventilationTerminals`' design flows to read exactly as they did before the catalogue was connected.
+
+## Debt found during PR1 and deliberately NOT fixed
+
+Recorded rather than migrated - none of it blocks the materialisation, and fixing any of it would widen
+PR1 beyond its scope:
+
+- `Modify.Merge` ends in an unconditional `return false` whatever it did, so its return value cannot tell
+  a successful merge from a failed one. The `YearlySchedule` regression therefore asserts what the merge
+  *wrote* rather than what it returned.
+- `SystemEnergyCentre.Duplicate(Guid?)` mutates **`this`** rather than `result`: it enumerates
+  `result.GetSystemPlantRooms()` but calls unqualified `Remove`/`Add`, which bind to the source. Avoided.
+- `SystemPlantRoom.Duplicate(Guid?)` assigns **random** guids and downgrades a `DisplaySystemPlantRoom` to
+  a plain `SystemPlantRoom`. Avoided.
+- `AnalyticalSystemsProperties`' copy constructor **shares** its `ISchedule` instances. Tolerated: PR1
+  never mutates them, and it copies the caller's schedule before it enters.
+- `YearlySchedule.Values`' setter throws `NullReferenceException` on null (the null branch does not
+  return) and `DivideByZeroException` on an empty array. Explicitly out of PR1 scope per the plan.
+- `DailySchedule(DailySchedule)` shares `ScheduleDay` instances and copies its own empty
+  `scheduleDayNames` rather than the source's.
+- `Query.Duplicate(this SystemPlantRoom, ISystemSpaceComponent)` is unconditionally self-recursive.
+  Nothing calls it.
+- `Modify.TryConnect` throws `NotImplementedException` for any endpoint pair it does not enumerate.
+  Avoided; PR1 dispatches to the typed `Connect` overloads itself.
+- `RelationCluster.TryAddObject` **silently replaces** an existing entry on a guid collision - which is
+  why PR1 keeps its own identity-collision map and refuses rather than trusting the store.
+- `RelationCluster.Contains`/`GetGuid` fall back to a full linear equality scan when the object is absent,
+  and `Core.Query.Type` performs an uncached assembly walk per type name. PR1 works around both, by adding
+  before relating and by keeping `GetObjects<T>()` out of every per-space loop.
+- `SystemConnection.FromJsonObject` silently drops any `ObjectReference` stored with index `-1`, so
+  index-less connections do not survive a round trip. PR1 always writes explicit connector indexes.
+- `SystemEnergyCentre.GetSystemPlantRoom(string)`/`(ObjectReference)` and `GetSystemEnergySource(string)`
+  iterate `Dictionary.Values` with `ElementAt(i)` inside a `for`, which is O(n^2). Never called.
+- `VentilationSystemParameter.SupplyUnitName` being a name rather than a relation (SAM-side, already
+  recorded there). Migrating it would be a `SAM` production change, which PR1 must not make.
+
+The PR2 blockers - the `ZoneLoads` fixed-index issue, the TPD `Simulate` false positive and the
+`SystemSpaceResult` identity ambiguity - are **not** touched here; they belong to PR2 by #111's own gate.
 
 ## Issues / blockers
 
