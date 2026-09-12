@@ -10650,14 +10650,14 @@
                     "Guid": "ffe27cd2-f53d-4603-ab6f-02342dae6550",
                     "Description": "",
                     "LoadDistribution": "Even",
-                    "MinimumReturnTemperature": 0.0,
+                    "MinimumReturnTemperature": 50.0,
                     "Distribution": {
                       "_type": "SAM.Analytical.Systems.Distribution,SAM.Analytical.Systems",
                       "Value": 100.0,
                       "IsEfficiency": true
                     },
                     "DesignPressureDrop": 19.5,
-                    "DesignTemperatureDifference": 0.0,
+                    "DesignTemperatureDifference": 11.0,
                     "SystemGeometryInstance": {
                       "_type": "SAM.Geometry.Systems.SystemGeometryInstance,SAM.Geometry.Systems",
                       "SystemGeometrySymbol": {
