@@ -22,8 +22,12 @@ namespace SAM.Analytical.Systems
         /// dictionary, and what stops the whole non-air plant being cloned once per unit.
         /// </para>
         /// </summary>
+        /// <param name="mechanicalVentilationUnitSettings">
+        /// This unit's resolved manufacturer-aware behaviour (PR5A, SAM#111 plan §C), or null to
+        /// materialise exactly as PR1 did.
+        /// </param>
         /// <returns>False where a refusal was raised; the caller then discards the whole graph.</returns>
-        internal static bool MechanicalVentilationAirSystem(MechanicalVentilationContext context, SystemPlantRoom systemPlantRoom, AirSystem airSystem_Template, AirHandlingUnit airHandlingUnit, List<Guid> spaceGuids)
+        internal static bool MechanicalVentilationAirSystem(MechanicalVentilationContext context, SystemPlantRoom systemPlantRoom, AirSystem airSystem_Template, AirHandlingUnit airHandlingUnit, List<Guid> spaceGuids, MechanicalVentilationUnitSettings mechanicalVentilationUnitSettings = null)
         {
             //---------------------------------------------------------------------------------------------
             //The air-system key. Every per-unit identity below derives through it, and it carries the
@@ -97,6 +101,158 @@ namespace SAM.Analytical.Systems
                 }
 
                 dictionary_New[keyValuePair.Key] = systemObject_New;
+            }
+
+            //---------------------------------------------------------------------------------------------
+            //PR5A (SAM#111 plan §C) - this unit's resolved manufacturer-aware behaviour, applied to its own
+            //re-keyed fan and exchanger copies while they are still only in dictionary_New - BEFORE anything
+            //below adds them to the plant room. SystemPlantRoom.Add clones on the way in (confirmed: an
+            //override applied to a dictionary_New object after Add left the plant room's own copy at the
+            //template's shipped value), so this has to happen here, on the objects this method still holds,
+            //or it silently does nothing. Nothing here reads a product name: every value arrived already
+            //resolved from SAM.Analytical's COM-free resolver, and a caller that passes null (or an
+            //all-untouched settings object) leaves this unit exactly as PR1 materialised it.
+            //---------------------------------------------------------------------------------------------
+
+            if (mechanicalVentilationUnitSettings != null)
+            {
+                bool hasFanOverride = !double.IsNaN(mechanicalVentilationUnitSettings.SupplyFanPressure_Pa)
+                    || !double.IsNaN(mechanicalVentilationUnitSettings.ExtractFanPressure_Pa)
+                    || !double.IsNaN(mechanicalVentilationUnitSettings.FanOverallEfficiency)
+                    || !double.IsNaN(mechanicalVentilationUnitSettings.SupplyFanHeatGainFactor)
+                    || !double.IsNaN(mechanicalVentilationUnitSettings.ExtractFanHeatGainFactor);
+
+                if (hasFanOverride)
+                {
+                    //The extract fan sits directly on the prototype room's extract connector in both
+                    //shipped templates (measured: connector 0 is a damper, connector 1 is "Return Air Fan"
+                    //in MV.json and MVRE.json alike) - but the supply fan does not, because a per-room damper
+                    //sits between it and the room. So the supply fan is identified by elimination: the unit's
+                    //other fan, among exactly two. Still graph position and count, never a name - "Fresh Air
+                    //Fan"/"Return Air Fan" are never read.
+                    //
+                    //Identified on the TEMPLATE's own untouched prototype and connections - dictionary_Rekey's
+                    //values, and the original connections systemPlantRoom still carries for them, both intact
+                    //at this point in every unit's pass, since the template's own air plant is only removed
+                    //once every unit has been materialised (MechanicalVentilation.cs, D9) - then mapped
+                    //through dictionary_New to this unit's own copy.
+                    SystemSpace systemSpace_Prototype_Template = null;
+                    int count_Prototype = 0;
+
+                    foreach (ISystemJSAMObject systemJSAMObject_Rekey in dictionary_Rekey.Values)
+                    {
+                        if (systemJSAMObject_Rekey is SystemSpace systemSpace_Rekey
+                            && Core.Systems.Query.SystemConnection(systemPlantRoom, systemSpace_Rekey, 0) != null
+                            && Core.Systems.Query.SystemConnection(systemPlantRoom, systemSpace_Rekey, 1) != null)
+                        {
+                            systemSpace_Prototype_Template = systemSpace_Rekey;
+                            count_Prototype++;
+                        }
+                    }
+
+                    if (count_Prototype != 1
+                        || !TryGetAttachment(systemPlantRoom, systemSpace_Prototype_Template, 1, out ISystemComponent systemComponent_Extract_Template, out int _)
+                        || !(systemComponent_Extract_Template is SAMObject sAMObject_Extract_Template)
+                        || !dictionary_New.TryGetValue(sAMObject_Extract_Template.Guid, out ISystemJSAMObject systemJSAMObject_Extract)
+                        || !(systemJSAMObject_Extract is SystemFan systemFan_Extract))
+                    {
+                        context.Refuse(string.Format("Air handling unit '{0}' states fan settings, but the component structurally attached to its prototype room's extract connector is not a fan.", airHandlingUnit.Name));
+                        return false;
+                    }
+
+                    List<SystemFan> systemFans = new List<SystemFan>();
+
+                    foreach (ISystemJSAMObject systemJSAMObject_Fan in dictionary_New.Values)
+                    {
+                        if (systemJSAMObject_Fan is SystemFan systemFan_Temp)
+                        {
+                            systemFans.Add(systemFan_Temp);
+                        }
+                    }
+
+                    if (systemFans.Count != 2)
+                    {
+                        context.Refuse(string.Format("Air handling unit '{0}' states fan settings, but its topology template's air-system copy carries {1} fan(s) - a supply fan and an extract fan need exactly two.", airHandlingUnit.Name, systemFans.Count));
+                        return false;
+                    }
+
+                    SystemFan systemFan_Supply = null;
+                    int count_NotExtract = 0;
+
+                    foreach (SystemFan systemFan_Candidate in systemFans)
+                    {
+                        if (systemFan_Candidate.Guid != systemFan_Extract.Guid)
+                        {
+                            systemFan_Supply = systemFan_Candidate;
+                            count_NotExtract++;
+                        }
+                    }
+
+                    if (count_NotExtract != 1)
+                    {
+                        context.Refuse(string.Format("Air handling unit '{0}' states fan settings, but its two fans cannot be told apart - the one attached to the prototype room's extract connector does not match exactly one of the unit's own re-keyed fans.", airHandlingUnit.Name));
+                        return false;
+                    }
+
+                    if (!double.IsNaN(mechanicalVentilationUnitSettings.SupplyFanPressure_Pa))
+                    {
+                        systemFan_Supply.Pressure = mechanicalVentilationUnitSettings.SupplyFanPressure_Pa;
+                    }
+
+                    if (!double.IsNaN(mechanicalVentilationUnitSettings.ExtractFanPressure_Pa))
+                    {
+                        systemFan_Extract.Pressure = mechanicalVentilationUnitSettings.ExtractFanPressure_Pa;
+                    }
+
+                    if (!double.IsNaN(mechanicalVentilationUnitSettings.FanOverallEfficiency))
+                    {
+                        //One certified figure, declaratively stated on both fans - plan §C.
+                        systemFan_Supply.OverallEfficiency = new ModifiableValue(mechanicalVentilationUnitSettings.FanOverallEfficiency);
+                        systemFan_Extract.OverallEfficiency = new ModifiableValue(mechanicalVentilationUnitSettings.FanOverallEfficiency);
+                    }
+
+                    if (!double.IsNaN(mechanicalVentilationUnitSettings.SupplyFanHeatGainFactor))
+                    {
+                        systemFan_Supply.HeatGainFactor = mechanicalVentilationUnitSettings.SupplyFanHeatGainFactor;
+                    }
+
+                    if (!double.IsNaN(mechanicalVentilationUnitSettings.ExtractFanHeatGainFactor))
+                    {
+                        systemFan_Extract.HeatGainFactor = mechanicalVentilationUnitSettings.ExtractFanHeatGainFactor;
+                    }
+                }
+
+                if (!double.IsNaN(mechanicalVentilationUnitSettings.HeatRecoverySensibleEfficiency))
+                {
+                    SystemExchanger systemExchanger = null;
+                    int count_Exchanger = 0;
+
+                    foreach (ISystemJSAMObject systemJSAMObject_Exchanger in dictionary_New.Values)
+                    {
+                        if (systemJSAMObject_Exchanger is SystemExchanger systemExchanger_Temp)
+                        {
+                            systemExchanger = systemExchanger_Temp;
+                            count_Exchanger++;
+                        }
+                    }
+
+                    if (count_Exchanger != 1)
+                    {
+                        context.Refuse(string.Format("Air handling unit '{0}' states a heat recovery efficiency, but its topology template's air-system copy carries {1} heat exchanger(s) - heat recovery needs exactly one.", airHandlingUnit.Name, count_Exchanger));
+                        return false;
+                    }
+
+                    //The frozen mapping (SAM#111 plan §C): a resolved certified efficiency, never the shipped
+                    //template's own figure (MVRE.json's 0.7 is never manufacturer data), latent recovery not
+                    //modelled, a Simple exchanger, no heating-only restriction, and no optimiser adjustment -
+                    //an explicit override of MVRE.json's own true.
+                    systemExchanger.SensibleEfficiency = new ModifiableValue(mechanicalVentilationUnitSettings.HeatRecoverySensibleEfficiency);
+                    systemExchanger.LatentEfficiency = new ModifiableValue(0.0);
+                    systemExchanger.ExchangerType = ExchangerType.Simple;
+                    systemExchanger.ExchangerCalculationMethod = ExchangerCalculationMethod.Simple;
+                    systemExchanger.HeatingOnly = false;
+                    systemExchanger.AdjustForOptimiser = false;
+                }
             }
 
             //Re-point every copied connection at the copies, before anything is added - SystemPlantRoom.Add
@@ -262,7 +418,23 @@ namespace SAM.Analytical.Systems
                     systemSpace_Prototype.TemperatureSetpoint,
                     systemSpace_Prototype.RelativeHumiditySetpoint,
                     systemSpace_Prototype.PollutantSetpoint,
-                    systemSpace_Prototype.DisplacementVentilation,
+                    //PR5A topology normalisation (SAM#111 plan, Phase 0 "Test A" + the licensed B0/A parity
+                    //decomposition): MV.json's zone prototype states true; MVRE.json's states false, though
+                    //both model the same physical rooms - that difference is authoring residue, not a stated
+                    //design choice, and switching MV -> MVRE would otherwise silently move a room's zone
+                    //physics by up to several K with nothing to do with heat recovery. Measurement proved the
+                    //direction: true reproduces the frozen B0 control (MVRE at epsilon 0 matches B0 exactly);
+                    //false moves every variant away from it.
+                    //
+                    //This is deliberately a code-level normalisation, not a template edit: the frozen plan
+                    //states MV.json and MVRE.json are both read-only (plan §C), so the shipped MVRE.json's own
+                    //`false` cannot be corrected in place. It is unconditional across every template this
+                    //method is ever called with - not a heuristic scoped to "looks like an MV/MVRE swap" - so
+                    //it is explicitly a two-template, plan-mandated correction (only MV and MVRE exist in
+                    //scope for PR5A), not a general claim that every ventilation topology should be
+                    //displacement. A third template genuinely needing false would need this revisited, not
+                    //silently overridden by a future maintainer who missed this comment.
+                    true,
                     systemSpace_Prototype.ModelInterzoneFlow,
                     systemSpace_Prototype.ModelVentilationFlow,
                     flowRate,

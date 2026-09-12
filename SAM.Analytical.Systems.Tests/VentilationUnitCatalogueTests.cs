@@ -1341,9 +1341,11 @@ namespace SAM.Analytical.Systems.Tests
                     break;
 
                 case "FutureSchema":
-                    //Plausible-looking, not this reader's version - must not be quietly parsed as v1.
+                    //Plausible-looking, not one of this reader's accepted versions - must not be quietly
+                    //parsed as v1 or v2. (v2 itself became an accepted tag under PR5A - see
+                    //VentilationUnitCatalogueV2Tests - so this uses a version still one further out.)
                     entries = entry_60 + "," + entry_90;
-                    schema = "VentilationUnitCatalogue:v2";
+                    schema = "VentilationUnitCatalogue:v3";
                     break;
 
                 default:

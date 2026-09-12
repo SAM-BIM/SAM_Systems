@@ -28,6 +28,20 @@ namespace SAM.Analytical.Systems
         public const string VentilationUnitCatalogueSchema = "VentilationUnitCatalogue:v1";
 
         /// <summary>
+        /// The schema tag a catalogue may declare to carry the PR5A manufacturer-aware vocabulary -
+        /// <c>HeatRecoveryPerformance</c> and <c>FanPerformance</c> (SAM#111 plan §K.1) - on a template.
+        /// <para>
+        /// <b>v1 stays legal and stays exactly what it always meant: "no behaviour data".</b> This reader
+        /// accepts both tags identically; neither the tag nor the presence of the new fields is required of
+        /// a v2 file. A v1 file with the new fields absent, and a v2 file with them absent, read as the same
+        /// thing. What v2 adds is only that a template <i>may</i> also carry them - and if it does, they are
+        /// validated exactly as every other optional field here is: present-and-unusable refuses the whole
+        /// catalogue, absent is legal.
+        /// </para>
+        /// </summary>
+        public const string VentilationUnitCatalogueSchemaV2 = "VentilationUnitCatalogue:v2";
+
+        /// <summary>
         /// The manufacturer ventilation unit products this repository ships - what each one is, where its
         /// figures came from, what it can move, and what it does under the conditions its manufacturer
         /// published.
@@ -69,10 +83,16 @@ namespace SAM.Analytical.Systems
             }
 
             //Checked before anything else is read. Missing, the wrong JSON shape, or a value that is not
-            //EXACTLY VentilationUnitCatalogueSchema all refuse here - an unrecognised schema, future or
-            //otherwise, is never interpreted as this version.
+            //EXACTLY one of the accepted tags all refuse here - an unrecognised schema, future or
+            //otherwise, is never interpreted as one of these versions.
             JsonNode jsonNode_Schema = jsonObject["Schema"];
-            if (jsonNode_Schema == null || jsonNode_Schema.GetValueKind() != JsonValueKind.String || !string.Equals(jsonNode_Schema.GetValue<string>(), VentilationUnitCatalogueSchema, StringComparison.Ordinal))
+            if (jsonNode_Schema == null || jsonNode_Schema.GetValueKind() != JsonValueKind.String)
+            {
+                return null;
+            }
+
+            string schema = jsonNode_Schema.GetValue<string>();
+            if (!string.Equals(schema, VentilationUnitCatalogueSchema, StringComparison.Ordinal) && !string.Equals(schema, VentilationUnitCatalogueSchemaV2, StringComparison.Ordinal))
             {
                 return null;
             }
@@ -117,6 +137,20 @@ namespace SAM.Analytical.Systems
                 }
 
                 if (jsonObject_Template.ContainsKey("FlowFractionByControlTemperature") && (ventilationUnitTemplate.FlowFractionByControlTemperature == null || !ventilationUnitTemplate.FlowFractionByControlTemperature.IsValid))
+                {
+                    return null;
+                }
+
+                //PR5A manufacturer-aware vocabulary (SAM#111 plan §K.1) - optional on both v1 and v2, and
+                //checked the same way as every other optional field above: present-and-unusable refuses the
+                //whole catalogue rather than being read as "not stated". A v1 catalogue with neither field
+                //behaves exactly as it always has.
+                if (jsonObject_Template.ContainsKey("HeatRecoveryPerformance") && (ventilationUnitTemplate.HeatRecoveryPerformance == null || !ventilationUnitTemplate.HeatRecoveryPerformance.IsValid))
+                {
+                    return null;
+                }
+
+                if (jsonObject_Template.ContainsKey("FanPerformance") && (ventilationUnitTemplate.FanPerformance == null || !ventilationUnitTemplate.FanPerformance.IsValid))
                 {
                     return null;
                 }

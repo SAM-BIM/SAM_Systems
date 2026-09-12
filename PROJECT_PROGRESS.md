@@ -1,6 +1,87 @@
 # Project Progress
 
 ## Branch
+`feature/parto-pr5a-unit-settings`, branched from `sow/2026-Q3` at **`a0395dc9`** (SAM_Systems #22, DHW
+plant-room template fix). PR against `sow/2026-Q3`, **not merged**.
+
+**Part O Iteration 3 PR5A - SAM_Systems slice (SAM#111).** PR5A merge order is SAM -> SAM_Systems -> SAM_Tas
+-> SAM_UI. SAM's slice (#117, generic manufacturer vocabulary + COM-free resolver, `SAM.Analytical`) is
+already merged (`sow/2026-Q3` `b4a1283f`) and this branch is rebuilt against it. **No SAM_Tas or SAM_UI
+production change from this slice.**
+
+**What was added** (all in `SAM.Analytical.Systems`):
+- `MechanicalVentilationUnitSettings` (new) - one physical unit's resolved manufacturer-aware behaviour:
+  `HeatRecoverySensibleEfficiency`, `HeatRecoverySupplyLimit_C` (B3, carried but not yet consumed here),
+  `SupplyFanPressure_Pa`/`ExtractFanPressure_Pa`/`FanOverallEfficiency`,
+  `SupplyFanHeatGainFactor`/`ExtractFanHeatGainFactor`. Every field NaN/null by default, meaning "leave the
+  template's own value untouched" - never a manufacturer figure, never zero.
+- `MechanicalVentilationSettings.UnitSettings` (new): `IReadOnlyDictionary<Guid, MechanicalVentilationUnitSettings>`
+  keyed by analytical `AirHandlingUnit.Guid`. Copied defensively in both directions. All-or-nothing per
+  materialisation call: empty is the B0 control (untouched); non-empty must name every unit the call
+  materialises, or the whole call refuses (a partially configured graph is never produced).
+- `Create.MechanicalVentilation` / `Create.MechanicalVentilationAirSystem`: apply the per-unit settings onto
+  the unit's own re-keyed fan and exchanger copies, **before** they are added to the `SystemPlantRoom` -
+  `SystemPlantRoom.Add` clones on the way in, so an override applied afterwards silently does nothing (found
+  and fixed during implementation, see the code comment at the top of the settings-application block).
+  - Extract fan identified structurally, by connector position on the template's own untouched prototype
+    room (connector 1 in both shipped templates). Supply fan identified by elimination - the unit's other
+    fan, among exactly two - because a per-room damper, not the fan, sits on the supply connector (measured
+    on both `MV.json` and `MVRE.json`). No fan is ever identified by name.
+  - Heat recovery efficiency applied to the unit's one `SystemExchanger` (refuses if not exactly one), with
+    the frozen mapping forced regardless of the shipped default: `LatentEfficiency = 0`, `ExchangerType`/
+    `ExchangerCalculationMethod = Simple`, `HeatingOnly = false`, `AdjustForOptimiser = false` - an explicit
+    override of `MVRE.json`'s own `true`.
+  - `SystemFan.Capacity` is never written by any of this.
+  - The energy-centre identity key folds in every unit's settings (only when `UnitSettings` is non-empty),
+    so B0's own derived guids are provably byte-identical to PR1's, and two differently-configured runs of
+    the same design never collide.
+- **Topology normalisation (Phase 0 "Test A" + the licensed B0/A parity decomposition):** every materialised
+  zone's `DisplacementVentilation` is now stated `true` unconditionally, regardless of which template it came
+  from. `MV.json` already states `true` (no-op); `MVRE.json` states `false`, which measurement proved moves
+  the frozen B0 control away from Reference A. This is a deliberate, plan-mandated, two-template correction
+  (MV.json/MVRE.json are both read-only per the frozen plan, so the shipped file cannot be corrected in
+  place) - not a general "every template should be displacement" claim; see the code comment.
+- `Query.VentilationUnitTemplates` (catalogue reader): accepts the new `VentilationUnitCatalogue:v2` schema
+  tag alongside `v1`. The two new optional fields SAM#117 added to `VentilationUnitTemplate`
+  (`HeatRecoveryPerformance`, `FanPerformance`) are validated the same way every other optional field already
+  is - present-and-unusable refuses the whole catalogue, absent is legal. The shipped catalogue is
+  **untouched**: no certified MRXBOX data (E1/E2) has been sourced, so nothing is transcribed and the real
+  product still refuses B1/B2.
+
+**Independent review finding, fixed before this record:** the settings-application logic originally ran
+*after* the per-unit fan/exchanger copies were added to the plant room, so every override silently had no
+effect on the materialised graph (`SystemPlantRoom.Add` clones). Found via a failing assertion (exchanger
+stayed at the shipped `0.7` instead of the requested override), root-caused, and fixed by moving the whole
+block earlier, before `Add()`, identifying roles on the template's own untouched connectivity instead of the
+(already-added) copies'.
+
+**Validation:**
+- `SAM.Analytical.Systems.Tests`: **176/176** (was 149; +27: `MechanicalVentilationUnitSettingsTests`,
+  `VentilationUnitCatalogueV2Tests`, plus one pre-existing test fixture updated - see below).
+- `dotnet build SAM_Systems.sln -c Release`: 0 errors.
+- One pre-existing test updated: `VentilationUnitCatalogueTests.ABrokenEntry_RefusesTheWholeCatalogue`'s
+  "FutureSchema" case used `VentilationUnitCatalogue:v2` as its example of an unsupported future schema; now
+  that v2 is a real accepted tag, the fixture uses `v3` instead - same intent (a schema this reader does not
+  yet know must still refuse), same test.
+- 5,000-space / 50-air-handling-unit scaling test added, each unit carrying its own distinct
+  `MechanicalVentilationUnitSettings` - no O(n²) scan introduced (checked explicitly during independent
+  review: the new identification loops are bounded by the unit's own template subgraph, not by total
+  AHU/space counts).
+
+**Not in this slice (frozen plan, deliberately deferred):**
+- E1/E2 certified MRXBOX data - not sourced this session, so the real canonical product still fails closed.
+- `HeatRecoverySupplyLimit_C` (B3) is carried on the settings type but not yet interpreted anywhere - that is
+  SAM_Tas's slice.
+- No SAM_Tas conversion (`ExchCalcType`, route options, licensed operating-point evidence) and no SAM_UI
+  orchestration/behaviour-mode change.
+
+**Next step:** independent review and merge of this PR. Then the **SAM_Tas PR5A slice**: route options
+(fan-heat policy, B0 keeps `ClearToZero`), `Convert.ToTPD(Exchanger)` writing `ExchCalcType`, exchanger
+reconciliation/duty-carrier handling, a P0 result-read-back probe, and the licensed operating-point evidence
+A-D against the full-year canonical no-IZAM TSD.
+
+## Previous entry, retained for context
+
 `part-o/iteration3-systems-materialisation`, branched from `sow/2026-Q3` at **`9e1cd06`**.
 
 Baseline measured before any edit, on that tip:
