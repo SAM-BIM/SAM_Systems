@@ -274,6 +274,36 @@ namespace SAM.Analytical.Systems
             guids_AirHandlingUnit.Sort();
 
             //=============================================================================================
+            //D2.1 - PR5A per-unit manufacturer-aware settings (SAM#111 plan §C). All-or-nothing: an empty
+            //       dictionary is the B0 control and touches nothing below; a non-empty one has to name
+            //       every unit this call materialises, or a unit nobody mentioned would silently stay at
+            //       parity while its neighbours were configured - a partially configured graph.
+            //=============================================================================================
+
+            if (context.Settings.UnitSettings.Count != 0)
+            {
+                HashSet<Guid> guids_AirHandlingUnitSet = new HashSet<Guid>(guids_AirHandlingUnit);
+
+                foreach (Guid guid_UnitSettings in context.Settings.UnitSettings.Keys)
+                {
+                    if (!guids_AirHandlingUnitSet.Contains(guid_UnitSettings))
+                    {
+                        context.Refuse(string.Format("Unit settings were supplied for air handling unit '{0}', which this call does not materialise.", dictionary_AirHandlingUnit.TryGetValue(guid_UnitSettings, out AirHandlingUnit airHandlingUnit_Unmaterialised) ? airHandlingUnit_Unmaterialised.Name : guid_UnitSettings.ToString()));
+                        return Result(context, null);
+                    }
+                }
+
+                foreach (Guid guid_AirHandlingUnit_Check in guids_AirHandlingUnit)
+                {
+                    if (!context.Settings.UnitSettings.ContainsKey(guid_AirHandlingUnit_Check))
+                    {
+                        context.Refuse(string.Format("Air handling unit '{0}' has no unit settings while other units in this call do, so the graph would be only partly configured.", dictionary_AirHandlingUnit[guid_AirHandlingUnit_Check].Name));
+                        return Result(context, null);
+                    }
+                }
+            }
+
+            //=============================================================================================
             //D3 / D4 - membership and design duties, per group
             //=============================================================================================
 
@@ -322,6 +352,19 @@ namespace SAM.Analytical.Systems
             components_EnergyCentre.Add(context.Settings.Schedule?.GetType()?.FullName);
             components_EnergyCentre.Add(context.Settings.Schedule?.Name);
 
+            //PR5A: each unit's settings, in the same ascending-guid order as guids_AirHandlingUnit above -
+            //never dictionary enumeration order - so a B-variant never collides with another B-variant or
+            //with a differently-configured run of the same design. Nothing is added at all when
+            //UnitSettings is empty (the B0 control), so B0's own derived identities are byte-identical to
+            //PR1's - the "no unit settings" path here is exactly the pre-PR5A component list.
+            if (context.Settings.UnitSettings.Count != 0)
+            {
+                foreach (Guid guid_AirHandlingUnit_Identity in guids_AirHandlingUnit)
+                {
+                    components_EnergyCentre.Add(context.Settings.UnitSettings[guid_AirHandlingUnit_Identity]?.IdentityComponent());
+                }
+            }
+
             context.Key_EnergyCentre = string.Join("|", components_EnergyCentre);
 
             Guid guid_EnergyCentre = context.Guid_Derived("SystemEnergyCentre", components_EnergyCentre.ToArray());
@@ -350,7 +393,9 @@ namespace SAM.Analytical.Systems
 
             foreach (Guid guid_AirHandlingUnit in guids_AirHandlingUnit)
             {
-                if (!MechanicalVentilationAirSystem(context, systemPlantRoom, airSystem_Template, dictionary_AirHandlingUnit[guid_AirHandlingUnit], dictionary_Member[guid_AirHandlingUnit]))
+                context.Settings.UnitSettings.TryGetValue(guid_AirHandlingUnit, out MechanicalVentilationUnitSettings mechanicalVentilationUnitSettings);
+
+                if (!MechanicalVentilationAirSystem(context, systemPlantRoom, airSystem_Template, dictionary_AirHandlingUnit[guid_AirHandlingUnit], dictionary_Member[guid_AirHandlingUnit], mechanicalVentilationUnitSettings))
                 {
                     return Result(context, null);
                 }

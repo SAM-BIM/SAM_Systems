@@ -46,6 +46,15 @@ namespace SAM.Analytical.Systems.Tests
             return Path.Combine(DirectoryResources(), "MV.json");
         }
 
+        /// <summary>
+        /// The shipped <c>MVRE.json</c> - the existing MVHR topology PR5A's B1+ variants materialise onto
+        /// (SAM#111 plan §C) - read the same way as <see cref="Template"/>.
+        /// </summary>
+        internal static SystemEnergyCentre TemplateMVRE()
+        {
+            return Analytical.Systems.Query.SystemEnergyCentre(Path.Combine(DirectoryResources(), "MVRE.json"));
+        }
+
         internal static string DirectoryResources()
         {
             DirectoryInfo directoryInfo = new(AppContext.BaseDirectory);
