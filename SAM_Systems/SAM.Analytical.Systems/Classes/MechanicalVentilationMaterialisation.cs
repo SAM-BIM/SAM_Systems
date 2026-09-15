@@ -79,11 +79,32 @@ namespace SAM.Analytical.Systems
             }
         }
 
+        /// <summary>
+        /// PR5B (SAM#111): every recirculation cooling branch the graph carries, one per unit given
+        /// cooling settings, ordered by analytical unit guid. Empty for the B0 control, and always empty
+        /// on a refusal.
+        /// </summary>
+        public List<MechanicalVentilationRecirculationCooling> RecirculationCoolings
+        {
+            get
+            {
+                return new List<MechanicalVentilationRecirculationCooling>(recirculationCoolings);
+            }
+        }
+
+        private readonly List<MechanicalVentilationRecirculationCooling> recirculationCoolings;
+
         public MechanicalVentilationMaterialisation(Core.Systems.SystemEnergyCentre systemEnergyCentre, IEnumerable<string> refusals, IEnumerable<string> notes, IEnumerable<MechanicalVentilationBinding> bindings)
+            : this(systemEnergyCentre, refusals, notes, bindings, null)
+        {
+        }
+
+        public MechanicalVentilationMaterialisation(Core.Systems.SystemEnergyCentre systemEnergyCentre, IEnumerable<string> refusals, IEnumerable<string> notes, IEnumerable<MechanicalVentilationBinding> bindings, IEnumerable<MechanicalVentilationRecirculationCooling> recirculationCoolings)
         {
             this.refusals = refusals == null ? new List<string>() : new List<string>(refusals);
             this.notes = notes == null ? new List<string>() : new List<string>(notes);
             this.bindings = bindings == null ? new List<MechanicalVentilationBinding>() : new List<MechanicalVentilationBinding>(bindings);
+            this.recirculationCoolings = recirculationCoolings == null ? new List<MechanicalVentilationRecirculationCooling>() : new List<MechanicalVentilationRecirculationCooling>(recirculationCoolings);
 
             //Fail closed, structurally. A refusal and a graph cannot both be returned, so nothing
             //downstream has to remember to check the refusals before reading the graph.
@@ -93,6 +114,7 @@ namespace SAM.Analytical.Systems
             {
                 this.notes.Clear();
                 this.bindings.Clear();
+                this.recirculationCoolings.Clear();
             }
         }
     }

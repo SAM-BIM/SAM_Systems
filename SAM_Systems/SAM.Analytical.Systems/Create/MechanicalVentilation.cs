@@ -304,6 +304,41 @@ namespace SAM.Analytical.Systems
             }
 
             //=============================================================================================
+            //D2.2 - PR5B per-unit cooling modules (SAM#111). The same all-or-nothing rule, and every
+            //       stated module has to be materialisable before a single object is created.
+            //=============================================================================================
+
+            if (context.Settings.CoolingSettings.Count != 0)
+            {
+                HashSet<Guid> guids_AirHandlingUnitSet = new HashSet<Guid>(guids_AirHandlingUnit);
+
+                foreach (Guid guid_CoolingSettings in context.Settings.CoolingSettings.Keys)
+                {
+                    if (!guids_AirHandlingUnitSet.Contains(guid_CoolingSettings))
+                    {
+                        context.Refuse(string.Format("Cooling settings were supplied for air handling unit '{0}', which this call does not materialise.", dictionary_AirHandlingUnit.TryGetValue(guid_CoolingSettings, out AirHandlingUnit airHandlingUnit_Unmaterialised) ? airHandlingUnit_Unmaterialised.Name : guid_CoolingSettings.ToString()));
+                        return Result(context, null);
+                    }
+                }
+
+                foreach (Guid guid_AirHandlingUnit_Check in guids_AirHandlingUnit)
+                {
+                    if (!context.Settings.CoolingSettings.TryGetValue(guid_AirHandlingUnit_Check, out MechanicalVentilationCoolingSettings mechanicalVentilationCoolingSettings_Check))
+                    {
+                        context.Refuse(string.Format("Air handling unit '{0}' has no cooling module while other units in this call do, so the graph would be only partly configured.", dictionary_AirHandlingUnit[guid_AirHandlingUnit_Check].Name));
+                        return Result(context, null);
+                    }
+
+                    string refusal_Cooling = mechanicalVentilationCoolingSettings_Check == null ? "states no cooling settings." : mechanicalVentilationCoolingSettings_Check.Refusal();
+                    if (refusal_Cooling != null)
+                    {
+                        context.Refuse(string.Format("Air handling unit '{0}' has a cooling module that {1}", dictionary_AirHandlingUnit[guid_AirHandlingUnit_Check].Name, refusal_Cooling));
+                        return Result(context, null);
+                    }
+                }
+            }
+
+            //=============================================================================================
             //D3 / D4 - membership and design duties, per group
             //=============================================================================================
 
@@ -365,6 +400,16 @@ namespace SAM.Analytical.Systems
                 }
             }
 
+            //PR5B: each unit's cooling module, the same way - and nothing at all when none is stated, so the
+            //B0 control's identities stay byte-identical.
+            if (context.Settings.CoolingSettings.Count != 0)
+            {
+                foreach (Guid guid_AirHandlingUnit_Identity in guids_AirHandlingUnit)
+                {
+                    components_EnergyCentre.Add(context.Settings.CoolingSettings[guid_AirHandlingUnit_Identity]?.IdentityComponent());
+                }
+            }
+
             context.Key_EnergyCentre = string.Join("|", components_EnergyCentre);
 
             Guid guid_EnergyCentre = context.Guid_Derived("SystemEnergyCentre", components_EnergyCentre.ToArray());
@@ -394,8 +439,9 @@ namespace SAM.Analytical.Systems
             foreach (Guid guid_AirHandlingUnit in guids_AirHandlingUnit)
             {
                 context.Settings.UnitSettings.TryGetValue(guid_AirHandlingUnit, out MechanicalVentilationUnitSettings mechanicalVentilationUnitSettings);
+                context.Settings.CoolingSettings.TryGetValue(guid_AirHandlingUnit, out MechanicalVentilationCoolingSettings mechanicalVentilationCoolingSettings);
 
-                if (!MechanicalVentilationAirSystem(context, systemPlantRoom, airSystem_Template, dictionary_AirHandlingUnit[guid_AirHandlingUnit], dictionary_Member[guid_AirHandlingUnit], mechanicalVentilationUnitSettings))
+                if (!MechanicalVentilationAirSystem(context, systemPlantRoom, airSystem_Template, dictionary_AirHandlingUnit[guid_AirHandlingUnit], dictionary_Member[guid_AirHandlingUnit], mechanicalVentilationUnitSettings, mechanicalVentilationCoolingSettings))
                 {
                     return Result(context, null);
                 }
@@ -486,6 +532,11 @@ namespace SAM.Analytical.Systems
 
             MechanicalVentilationReconcile(context, adjacencyCluster, result, dictionary_Member, dictionary_AirHandlingUnit);
 
+            if (!context.HasRefusals && context.RecirculationCoolings.Count != 0)
+            {
+                MechanicalVentilationRecirculationCoolingReconcile(context, result);
+            }
+
             context.Bindings.Sort((x, y) => x.CompareTo(y));
 
             return Result(context, result);
@@ -493,7 +544,10 @@ namespace SAM.Analytical.Systems
 
         private static MechanicalVentilationMaterialisation Result(MechanicalVentilationContext context, SystemEnergyCentre systemEnergyCentre)
         {
-            return new MechanicalVentilationMaterialisation(systemEnergyCentre, context.Refusals, context.Notes, context.Bindings);
+            List<MechanicalVentilationRecirculationCooling> recirculationCoolings = new List<MechanicalVentilationRecirculationCooling>(context.RecirculationCoolings);
+            recirculationCoolings.Sort((x, y) => x.Guid_AirHandlingUnit.CompareTo(y.Guid_AirHandlingUnit));
+
+            return new MechanicalVentilationMaterialisation(systemEnergyCentre, context.Refusals, context.Notes, context.Bindings, recirculationCoolings);
         }
 
         private static void Adjacency(Dictionary<Guid, List<(Guid, Guid)>> dictionary, Guid guid, (Guid, Guid) key)

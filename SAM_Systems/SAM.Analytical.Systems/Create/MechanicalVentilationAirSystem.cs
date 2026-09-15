@@ -27,7 +27,11 @@ namespace SAM.Analytical.Systems
         /// materialise exactly as PR1 did.
         /// </param>
         /// <returns>False where a refusal was raised; the caller then discards the whole graph.</returns>
-        internal static bool MechanicalVentilationAirSystem(MechanicalVentilationContext context, SystemPlantRoom systemPlantRoom, AirSystem airSystem_Template, AirHandlingUnit airHandlingUnit, List<Guid> spaceGuids, MechanicalVentilationUnitSettings mechanicalVentilationUnitSettings = null)
+        /// <param name="mechanicalVentilationCoolingSettings">
+        /// PR5B (SAM#111): this unit's aggregate cooling module, materialised as an internal recirculation
+        /// branch inside this unit's own air system - or null for none.
+        /// </param>
+        internal static bool MechanicalVentilationAirSystem(MechanicalVentilationContext context, SystemPlantRoom systemPlantRoom, AirSystem airSystem_Template, AirHandlingUnit airHandlingUnit, List<Guid> spaceGuids, MechanicalVentilationUnitSettings mechanicalVentilationUnitSettings = null, MechanicalVentilationCoolingSettings mechanicalVentilationCoolingSettings = null)
         {
             //---------------------------------------------------------------------------------------------
             //The air-system key. Every per-unit identity below derives through it, and it carries the
@@ -124,73 +128,8 @@ namespace SAM.Analytical.Systems
 
                 if (hasFanOverride)
                 {
-                    //The extract fan sits directly on the prototype room's extract connector in both
-                    //shipped templates (measured: connector 0 is a damper, connector 1 is "Return Air Fan"
-                    //in MV.json and MVRE.json alike) - but the supply fan does not, because a per-room damper
-                    //sits between it and the room. So the supply fan is identified by elimination: the unit's
-                    //other fan, among exactly two. Still graph position and count, never a name - "Fresh Air
-                    //Fan"/"Return Air Fan" are never read.
-                    //
-                    //Identified on the TEMPLATE's own untouched prototype and connections - dictionary_Rekey's
-                    //values, and the original connections systemPlantRoom still carries for them, both intact
-                    //at this point in every unit's pass, since the template's own air plant is only removed
-                    //once every unit has been materialised (MechanicalVentilation.cs, D9) - then mapped
-                    //through dictionary_New to this unit's own copy.
-                    SystemSpace systemSpace_Prototype_Template = null;
-                    int count_Prototype = 0;
-
-                    foreach (ISystemJSAMObject systemJSAMObject_Rekey in dictionary_Rekey.Values)
+                    if (!TryGetUnitFans(context, systemPlantRoom, dictionary_Rekey, dictionary_New, airHandlingUnit, "states fan settings", out SystemFan systemFan_Supply, out SystemFan systemFan_Extract))
                     {
-                        if (systemJSAMObject_Rekey is SystemSpace systemSpace_Rekey
-                            && Core.Systems.Query.SystemConnection(systemPlantRoom, systemSpace_Rekey, 0) != null
-                            && Core.Systems.Query.SystemConnection(systemPlantRoom, systemSpace_Rekey, 1) != null)
-                        {
-                            systemSpace_Prototype_Template = systemSpace_Rekey;
-                            count_Prototype++;
-                        }
-                    }
-
-                    if (count_Prototype != 1
-                        || !TryGetAttachment(systemPlantRoom, systemSpace_Prototype_Template, 1, out ISystemComponent systemComponent_Extract_Template, out int _)
-                        || !(systemComponent_Extract_Template is SAMObject sAMObject_Extract_Template)
-                        || !dictionary_New.TryGetValue(sAMObject_Extract_Template.Guid, out ISystemJSAMObject systemJSAMObject_Extract)
-                        || !(systemJSAMObject_Extract is SystemFan systemFan_Extract))
-                    {
-                        context.Refuse(string.Format("Air handling unit '{0}' states fan settings, but the component structurally attached to its prototype room's extract connector is not a fan.", airHandlingUnit.Name));
-                        return false;
-                    }
-
-                    List<SystemFan> systemFans = new List<SystemFan>();
-
-                    foreach (ISystemJSAMObject systemJSAMObject_Fan in dictionary_New.Values)
-                    {
-                        if (systemJSAMObject_Fan is SystemFan systemFan_Temp)
-                        {
-                            systemFans.Add(systemFan_Temp);
-                        }
-                    }
-
-                    if (systemFans.Count != 2)
-                    {
-                        context.Refuse(string.Format("Air handling unit '{0}' states fan settings, but its topology template's air-system copy carries {1} fan(s) - a supply fan and an extract fan need exactly two.", airHandlingUnit.Name, systemFans.Count));
-                        return false;
-                    }
-
-                    SystemFan systemFan_Supply = null;
-                    int count_NotExtract = 0;
-
-                    foreach (SystemFan systemFan_Candidate in systemFans)
-                    {
-                        if (systemFan_Candidate.Guid != systemFan_Extract.Guid)
-                        {
-                            systemFan_Supply = systemFan_Candidate;
-                            count_NotExtract++;
-                        }
-                    }
-
-                    if (count_NotExtract != 1)
-                    {
-                        context.Refuse(string.Format("Air handling unit '{0}' states fan settings, but its two fans cannot be told apart - the one attached to the prototype room's extract connector does not match exactly one of the unit's own re-keyed fans.", airHandlingUnit.Name));
                         return false;
                     }
 
@@ -253,6 +192,18 @@ namespace SAM.Analytical.Systems
                     systemExchanger.HeatingOnly = false;
                     systemExchanger.AdjustForOptimiser = false;
                 }
+            }
+
+            //PR5B: a cooling module's recirculation fan is a copy of this unit's supply fan, found by the same
+            //structural rule - and found here, while the template's own prototype connections still say
+            //which fan is which. Taken after the settings above, so it carries this unit's own pressure and
+            //efficiency; its heat gain is cleared where the branch is built.
+            SystemFan systemFan_Supply_Cooling = null;
+
+            if (mechanicalVentilationCoolingSettings != null
+                && !TryGetUnitFans(context, systemPlantRoom, dictionary_Rekey, dictionary_New, airHandlingUnit, "has a cooling module", out systemFan_Supply_Cooling, out SystemFan _))
+            {
+                return false;
             }
 
             //Re-point every copied connection at the copies, before anything is added - SystemPlantRoom.Add
@@ -565,6 +516,15 @@ namespace SAM.Analytical.Systems
                 systemPlantRoom.Remove((ISystemComponent)systemSpace_Copied);
             }
 
+            //PR5B: the cooling module, on the rooms just materialised - the same SystemSpaces the ventilation
+            //legs use - and inside this same air system. The unit's own supply-side damper is the prototype
+            //of the recirculation dampers.
+            if (mechanicalVentilationCoolingSettings != null
+                && !MechanicalVentilationRecirculationCooling(context, systemPlantRoom, airSystem, airHandlingUnit, key_AirSystem, spaceGuids, systemFan_Supply_Cooling, systemComponent_Supply, mechanicalVentilationCoolingSettings))
+            {
+                return false;
+            }
+
             context.Note(string.Format("Air handling unit '{0}' materialised as one air system serving {1} space(s).", airHandlingUnit.Name, spaceGuids.Count));
 
             return true;
@@ -684,6 +644,100 @@ namespace SAM.Analytical.Systems
         /// One directional leg: constructed with explicit connector indexes, given its derived identity and
         /// its DESIGN airflow, added, and related to both its components and to the air system.
         /// </summary>
+        /// <summary>
+        /// The unit's own re-keyed supply and extract fan, identified structurally.
+        /// <para>
+        /// The extract fan sits directly on the prototype room's extract connector in both shipped templates
+        /// (measured: connector 0 is a damper, connector 1 is "Return Air Fan" in MV.json and MVRE.json
+        /// alike) - but the supply fan does not, because a per-room damper sits between it and the room. So
+        /// the supply fan is identified by elimination: the unit's other fan, among exactly two. Still graph
+        /// position and count, never a name - "Fresh Air Fan"/"Return Air Fan" are never read.
+        /// </para>
+        /// <para>
+        /// Identified on the TEMPLATE's own untouched prototype and connections - dictionary_Rekey's values,
+        /// and the original connections systemPlantRoom still carries for them, both intact at this point in
+        /// every unit's pass, since the template's own air plant is only removed once every unit has been
+        /// materialised (MechanicalVentilation.cs, D9) - then mapped through dictionary_New to this unit's own
+        /// copy.
+        /// </para>
+        /// </summary>
+        /// <param name="purpose">What the unit states that needs its fans, for the refusal - "states fan settings", "has a cooling module".</param>
+        private static bool TryGetUnitFans(
+            MechanicalVentilationContext context,
+            SystemPlantRoom systemPlantRoom,
+            Dictionary<Guid, ISystemJSAMObject> dictionary_Rekey,
+            Dictionary<Guid, ISystemJSAMObject> dictionary_New,
+            AirHandlingUnit airHandlingUnit,
+            string purpose,
+            out SystemFan systemFan_Supply,
+            out SystemFan systemFan_Extract)
+        {
+            systemFan_Supply = null;
+            systemFan_Extract = null;
+
+            SystemSpace systemSpace_Prototype_Template = null;
+            int count_Prototype = 0;
+
+            foreach (ISystemJSAMObject systemJSAMObject_Rekey in dictionary_Rekey.Values)
+            {
+                if (systemJSAMObject_Rekey is SystemSpace systemSpace_Rekey
+                    && Core.Systems.Query.SystemConnection(systemPlantRoom, systemSpace_Rekey, 0) != null
+                    && Core.Systems.Query.SystemConnection(systemPlantRoom, systemSpace_Rekey, 1) != null)
+                {
+                    systemSpace_Prototype_Template = systemSpace_Rekey;
+                    count_Prototype++;
+                }
+            }
+
+            if (count_Prototype != 1
+                || !TryGetAttachment(systemPlantRoom, systemSpace_Prototype_Template, 1, out ISystemComponent systemComponent_Extract_Template, out int _)
+                || !(systemComponent_Extract_Template is SAMObject sAMObject_Extract_Template)
+                || !dictionary_New.TryGetValue(sAMObject_Extract_Template.Guid, out ISystemJSAMObject systemJSAMObject_Extract)
+                || !(systemJSAMObject_Extract is SystemFan systemFan_Extract_Temp))
+            {
+                context.Refuse(string.Format("Air handling unit '{0}' {1}, but the component structurally attached to its prototype room's extract connector is not a fan.", airHandlingUnit.Name, purpose));
+                return false;
+            }
+
+            List<SystemFan> systemFans = new List<SystemFan>();
+
+            foreach (ISystemJSAMObject systemJSAMObject_Fan in dictionary_New.Values)
+            {
+                if (systemJSAMObject_Fan is SystemFan systemFan_Temp)
+                {
+                    systemFans.Add(systemFan_Temp);
+                }
+            }
+
+            if (systemFans.Count != 2)
+            {
+                context.Refuse(string.Format("Air handling unit '{0}' {1}, but its topology template's air-system copy carries {2} fan(s) - a supply fan and an extract fan need exactly two.", airHandlingUnit.Name, purpose, systemFans.Count));
+                return false;
+            }
+
+            int count_NotExtract = 0;
+
+            foreach (SystemFan systemFan_Candidate in systemFans)
+            {
+                if (systemFan_Candidate.Guid != systemFan_Extract_Temp.Guid)
+                {
+                    systemFan_Supply = systemFan_Candidate;
+                    count_NotExtract++;
+                }
+            }
+
+            if (count_NotExtract != 1)
+            {
+                systemFan_Supply = null;
+                context.Refuse(string.Format("Air handling unit '{0}' {1}, but its two fans cannot be told apart - the one attached to the prototype room's extract connector does not match exactly one of the unit's own re-keyed fans.", airHandlingUnit.Name, purpose));
+                return false;
+            }
+
+            systemFan_Extract = systemFan_Extract_Temp;
+
+            return true;
+        }
+
         private static SystemConnection Connection(SystemPlantRoom systemPlantRoom, AirSystem airSystem, ISystemComponent systemComponent_1, int index_1, ISystemComponent systemComponent_2, int index_2, Guid guid, double designFlowRate_Lps)
         {
             SystemConnection result = (SystemConnection)new SystemConnection(new SystemType(airSystem), systemComponent_1, index_1, systemComponent_2, index_2).Duplicate(guid);

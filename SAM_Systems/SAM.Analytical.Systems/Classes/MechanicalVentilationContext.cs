@@ -36,6 +36,9 @@ namespace SAM.Analytical.Systems
         /// <summary>The materialised <c>AirSystem</c> of each air handling unit.</summary>
         internal Dictionary<Guid, AirSystem> Dictionary_AirSystem { get; } = new Dictionary<Guid, AirSystem>();
 
+        /// <summary>PR5B: every recirculation cooling branch materialised so far.</summary>
+        internal List<MechanicalVentilationRecirculationCooling> RecirculationCoolings { get; } = new List<MechanicalVentilationRecirculationCooling>();
+
         /// <summary>
         /// Whether every design terminal of a unit's systems reached a materialised space - false where
         /// the caller's scope clipped some of them.

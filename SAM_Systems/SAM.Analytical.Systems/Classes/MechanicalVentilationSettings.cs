@@ -85,6 +85,40 @@ namespace SAM.Analytical.Systems
             }
         }
 
+        private Dictionary<Guid, MechanicalVentilationCoolingSettings> dictionary_CoolingSettings = new Dictionary<Guid, MechanicalVentilationCoolingSettings>();
+
+        /// <summary>
+        /// Each physical air handling unit's resolved aggregate cooling module, keyed by the analytical
+        /// <c>AirHandlingUnit.Guid</c> - PR5B (SAM#111). Materialised as an internal recirculation branch
+        /// inside the unit's own air system; see <see cref="MechanicalVentilationCoolingSettings"/>.
+        /// <para>
+        /// <b>Independent of <see cref="UnitSettings"/>, and all-or-nothing in the same way.</b> Empty (the
+        /// default) materialises exactly as before - the B0 control. A non-empty dictionary has to name
+        /// every unit the call materialises, and nothing else.
+        /// </para>
+        /// </summary>
+        public IReadOnlyDictionary<Guid, MechanicalVentilationCoolingSettings> CoolingSettings
+        {
+            get
+            {
+                return dictionary_CoolingSettings;
+            }
+            set
+            {
+                Dictionary<Guid, MechanicalVentilationCoolingSettings> dictionary = new Dictionary<Guid, MechanicalVentilationCoolingSettings>();
+
+                if (value != null)
+                {
+                    foreach (KeyValuePair<Guid, MechanicalVentilationCoolingSettings> keyValuePair in value)
+                    {
+                        dictionary[keyValuePair.Key] = keyValuePair.Value == null ? null : new MechanicalVentilationCoolingSettings(keyValuePair.Value);
+                    }
+                }
+
+                dictionary_CoolingSettings = dictionary;
+            }
+        }
+
         public MechanicalVentilationSettings()
         {
 
@@ -98,6 +132,7 @@ namespace SAM.Analytical.Systems
                 Name = mechanicalVentilationSettings.Name;
                 MaterialiseSystemSpaceComponents = mechanicalVentilationSettings.MaterialiseSystemSpaceComponents;
                 UnitSettings = mechanicalVentilationSettings.UnitSettings;
+                CoolingSettings = mechanicalVentilationSettings.CoolingSettings;
             }
         }
 
@@ -143,6 +178,21 @@ namespace SAM.Analytical.Systems
                 dictionary_UnitSettings = dictionary;
             }
 
+            if (jsonObject["CoolingSettings"] is JsonObject jsonObject_CoolingSettings)
+            {
+                Dictionary<Guid, MechanicalVentilationCoolingSettings> dictionary = new Dictionary<Guid, MechanicalVentilationCoolingSettings>();
+
+                foreach (KeyValuePair<string, JsonNode> keyValuePair in jsonObject_CoolingSettings)
+                {
+                    if (Guid.TryParse(keyValuePair.Key, out Guid guid) && keyValuePair.Value is JsonObject jsonObject_Value)
+                    {
+                        dictionary[guid] = new MechanicalVentilationCoolingSettings(jsonObject_Value);
+                    }
+                }
+
+                dictionary_CoolingSettings = dictionary;
+            }
+
             return true;
         }
 
@@ -174,6 +224,19 @@ namespace SAM.Analytical.Systems
                 }
 
                 result.Add("UnitSettings", jsonObject_UnitSettings);
+            }
+
+            //Omitted when empty, so a B0 settings object serializes exactly as it did before PR5B.
+            if (dictionary_CoolingSettings.Count != 0)
+            {
+                JsonObject jsonObject_CoolingSettings = new JsonObject();
+
+                foreach (KeyValuePair<Guid, MechanicalVentilationCoolingSettings> keyValuePair in dictionary_CoolingSettings)
+                {
+                    jsonObject_CoolingSettings.Add(keyValuePair.Key.ToString(), keyValuePair.Value?.ToJsonObject());
+                }
+
+                result.Add("CoolingSettings", jsonObject_CoolingSettings);
             }
 
             return result;
