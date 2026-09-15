@@ -1,8 +1,35 @@
 # Project Progress
 
 ## Branch
+`feature/parto-pr5b-recirculation-cooling`, branched from `sow/2026-Q3` at **`5213ba9`** (PR5A, #23 merged).
+Commit `c36ba11` (+ this docs commit), PR against `sow/2026-Q3`, **not merged**. It is first in the PR5B merge
+order: SAM_Systems -> SAM_Tas -> SAM_UI.
+
+**Part O Iteration 3 PR5B - SAM_Systems slice (SAM#111).** A same-AirSystem recirculation cooling branch built
+from per-unit cooling settings. Generic: no TAS identifiers, no product names.
+- **`MechanicalVentilationCoolingSettings` (new)**: resolved supply-air temperature table (ODB / EDB / airflow),
+  two-point flow-fraction law, ceiling not above the table's airflow axis, cooling-enable temperature.
+  `Refusal()` refuses rather than repairs.
+- **`MechanicalVentilationSettings.CoolingSettings`**: per AHU guid, all-or-nothing like `UnitSettings`. The
+  identity is folded in only when non-empty, so B0 stays byte-identical.
+- **`Create.MechanicalVentilationRecirculationCooling`** builds, per unit, room -> return damper -> DX
+  (equality table, `Extrapolate` false, `HeatingSetpoint` = gate, `HeatingDuty` 0) -> surrogate recirculation
+  fan (supply-fan copy, variable speed, HGF 0) -> supply damper -> same room.
+  - Shares are by floor area.
+  - Identities are derived, not minted.
+  - Branch connections carry no design flow.
+- **Post-materialisation reconcile.** Public `SupplyAirTemperatureModifier`.
+- **`MechanicalVentilationMaterialisation.RecirculationCoolings`** carries the lineage descriptors (cleared on
+  refusal).
+- **`TryGetUnitFans`** factors out the PR5A structural fan identification.
+
+**Validation:**
+- `SAM.Analytical.Systems.Tests` 203/203 (+27).
+- Licensed acceptance: `SAM_UI/documentation/evidence/PR5B-PRODUCTION-ACCEPTANCE.md`.
+
+## Previous: PR5A SAM_Systems slice
 `feature/parto-pr5a-unit-settings`, branched from `sow/2026-Q3` at **`a0395dc9`** (SAM_Systems #22, DHW
-plant-room template fix). PR against `sow/2026-Q3`, **not merged**.
+plant-room template fix). Merged as #23 (`5213ba9`).
 
 **Part O Iteration 3 PR5A - SAM_Systems slice (SAM#111).** PR5A merge order is SAM -> SAM_Systems -> SAM_Tas
 -> SAM_UI. SAM's slice (#117, generic manufacturer vocabulary + COM-free resolver, `SAM.Analytical`) is
