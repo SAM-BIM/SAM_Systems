@@ -64,15 +64,46 @@ had to move: the shipped tag is v3, and the "unrecognised future version" fixtur
 work plus 39 new. Release build clean. `git diff --check` clean. Requires SAM at
 `feature/parto-nuaire-manufacturer-guidance` (the `OperatingStrategy` vocabulary) built into `SAMuild`.
 
-**Unresolved / next.** The materialisation and native grounding. The native seam the route needs has been
-investigated rather than guessed: EDSL's own Tas Systems documentation states that a controller drives a coil
-by a 0-1 duty signal and **cannot** set its setpoint in degrees, and that only a heat exchanger or an
-optimiser consumes a setpoint-passthrough signal - so the two background modes' dependence on the extract
-temperature can only be expressed by a two-stream component. The candidate seam is therefore the unit's own
-exchanger, driven by a 0/1 bypass signal assembled from the generic controllers this repository already
-materialises (normal / difference / min / not), with the cooling mode continuing to use the table-modified
-coil setpoint PR5B already proved. That needs licensed TAS verification before any of it is written, exactly
-as PR5B's damper control law did. B0 and B4 are untouched by everything above.
+**Unresolved / next: the materialisation and its native grounding - seam now measured, not assumed.**
+
+The native seam was investigated rather than guessed, and then **verified on licensed TAS** before any
+SAM_Tas code is written (evidence: `C:\TasOut\nuaire-guidance\NUAIRE-GUIDANCE-NATIVE-SEAM-PROBE.md`, runs
+under `C:\TasOut\nuaire-guidance\runs`; investigation only, nothing committed from it).
+
+*Why the seam had to be found.* Two of the three modes state the supply temperature as a function of the
+**extract** air. EDSL's own Tas Systems 9.5.7 documentation states that a controller drives a coil by a 0-1
+duty proportion and cannot set its setpoint in degrees, and that only a heat exchanger or an optimiser
+consumes a setpoint-passthrough signal. A coil is single-stream, so on a fresh-air path its own `EDB` is the
+intake air. The extract dependence can therefore only be expressed by a **two-stream** component - the unit's
+exchanger.
+
+*What the probe measured*, on the PR5A fixture MVRE document with the intake forced to 0 degC, plant-room
+`SimulateEx` duct data, 24 hours, three systems:
+
+- a `Setpoint` with `SetpointMethod = 1` is an **absolute package supply-temperature target**: a constant
+  10 degC target produced exactly 10.000 degC in every hour;
+- a `Setpoint` table over `ODB` equal to the intake temperature produced exactly the intake temperature -
+  **the bypass mode, expressed as a target rather than as a mechanism**;
+- `EDB2` resolves exactly to the exchanger's own port-2 (extract) inlet duct state, and energy balances
+  across the component;
+- `SensibleEfficiency` **caps** the target: asked for 0.9 x extract at efficiency 0.7, TAS delivered exactly
+  0.7 and the control's own output. So the efficiency has to be set as a carrier bound above every target the
+  strategy can ask for - never presented as a certified efficiency - and the achieved supply temperature has
+  to be read back;
+- with that carrier, a 0.8 x extract target was met to within 0.001 degC.
+
+*And one result that matters to SAM#123's open EDSL item.* Driving the exchanger by a supply-temperature
+target instead of by an efficiency cut the worst hourly departure from the rule from **2.079 K to 0.466 K**
+over the same hours, with a mean departure of 0.01-0.03 K. The `DisplacementVentilation = true` + active
+heat-recovery discontinuity is **reduced, not removed**: the route must report those hours rather than absorb
+them, and this closes neither the EDSL question nor certified B2.
+
+*Still to establish:* a two-dimensional `Setpoint` table over `(ODB, EDB2)` - SAM_Tas already writes and
+reads back a three-dimensional one on a coil setpoint, so it is the same mechanism, but the exchanger case is
+unexercised; the cooling coil downstream of a setpoint-driven exchanger; and the elevated balanced supply and
+extract with its terminal proportionality.
+
+B0 and B4 are untouched by everything above.
 
 ## Previous: PR5B SAM_Systems slice (merged as #24)
 `feature/parto-pr5b-recirculation-cooling`, branched from `sow/2026-Q3` at **`5213ba9`** (PR5A, #23 merged).
