@@ -1,5 +1,5 @@
 {
-  "Schema": "VentilationUnitCatalogue:v1",
+  "Schema": "VentilationUnitCatalogue:v3",
   "Note": [
     "Manufacturer ventilation unit (MVHR / heat recovery) products, as their manufacturers publish them.",
     "",
@@ -360,6 +360,34 @@
           ]
         },
         "PerformanceDomainPolicy": "ClampToDomain"
+      },
+      "OperatingStrategy": {
+        "_type": "SAM.Analytical.VentilationUnitOperatingStrategy,SAM.Analytical",
+        "Source": "Nuaire manufacturer technical guidance received directly 2026-09-18 - 'Simplified Hybrid Cooling Guidance for IES', Nuaire, 07-08-2025, for MRXBOXAB-ECO5-AECV operating with MR-ECO-COOL-V. HELD PRIVATELY AND NOT REDISTRIBUTABLE: the document is not committed, attached or quoted anywhere in these repositories, and only the figures below are transcribed from it. A local hashed manifest records the document, its date, its SHA-256 and which requirement each figure came from. MANUFACTURER MODELLING GUIDANCE, NOT CERTIFIED PERFORMANCE: the guidance states how Nuaire recommends this unit's control behaviour be represented in a dynamic thermal model. It is not an EN 13141-7 / SAP certified heat-recovery efficiency and not a certified specific fan power, it satisfies neither, and this entry carries neither HeatRecoveryPerformance nor FanPerformance because of it. The extract fraction below is a PACKAGE supply-temperature rule from that guidance and must never be written into a certified heat-recovery field. Corroborated for the two background modes by Nuaire's 'Simplified SW guidelines for IES', 29-07-2024, whose bypass and heat/coolth recovery conditions are identical - but that document is for the MRXBOXAB-ECO*-SW, a different product whose third mode is an all-air purge inhibited when outdoor air is warmer than extract, and that behaviour is deliberately NOT transcribed here: for this hybrid cooling product the guidance states outdoor temperature has no influence on cooling activation.",
+        "CoolingActivationTemperature_C": 22.0,
+        "MinimumCoolingActivationTemperature_C": 22.0,
+        "MaximumCoolingActivationTemperature_C": 25.0,
+        "BypassMinimumIntakeTemperature_C": 12.0,
+        "BypassMinimumExtractTemperature_C": 18.0,
+        "MinimumElevatedAirFlow_Lps": 70.0,
+        "MaximumElevatedAirFlow_Lps": 90.0,
+        "SummerBypassSupplyTemperatureRule": {
+          "_type": "SAM.Analytical.SupplyTemperatureRule,SAM.Analytical",
+          "SupplyTemperatureRuleType": "OutdoorAir",
+          "PerformanceDomainPolicy": "ClampToDomain"
+        },
+        "HeatCoolthRecoverySupplyTemperatureRule": {
+          "_type": "SAM.Analytical.SupplyTemperatureRule,SAM.Analytical",
+          "SupplyTemperatureRuleType": "LinearBlend",
+          "ExtractFraction": 0.8,
+          "PerformanceDomainPolicy": "ClampToDomain"
+        },
+        "CoolingSupplyTemperatureRule": {
+          "_type": "SAM.Analytical.SupplyTemperatureRule,SAM.Analytical",
+          "SupplyTemperatureRuleType": "PerformanceTable",
+          "MinimumSupplyTemperature_C": 16.0,
+          "PerformanceDomainPolicy": "ClampToDomain"
+        }
       }
     },
     {

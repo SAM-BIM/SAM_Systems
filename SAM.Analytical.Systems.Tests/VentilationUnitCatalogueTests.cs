@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using SAM.Analytical.Enums;
@@ -93,7 +93,10 @@ namespace SAM.Analytical.Systems.Tests
             JsonObject jsonObject = Query.VentilationUnitCatalogue(Directory_Resources());
 
             Assert.NotNull(jsonObject);
-            Assert.Equal("VentilationUnitCatalogue:v1", jsonObject["Schema"]?.ToString());
+            //v3 since SAM#123: the domestic hybrid entry now also carries the manufacturer's own modelling
+            //OperatingStrategy. v1 and v2 stay legal and stay exactly what they meant - see
+            //VentilationUnitCatalogueV2Tests and VentilationUnitCatalogueV3Tests.
+            Assert.Equal("VentilationUnitCatalogue:v3", jsonObject["Schema"]?.ToString());
             Assert.NotNull(jsonObject["Note"]);
 
             //The reader and the file agree on the name, so neither can be renamed alone.
@@ -1342,10 +1345,11 @@ namespace SAM.Analytical.Systems.Tests
 
                 case "FutureSchema":
                     //Plausible-looking, not one of this reader's accepted versions - must not be quietly
-                    //parsed as v1 or v2. (v2 itself became an accepted tag under PR5A - see
-                    //VentilationUnitCatalogueV2Tests - so this uses a version still one further out.)
+                    //parsed as v1, v2 or v3. (v2 became an accepted tag under PR5A and v3 under SAM#123 -
+                    //see VentilationUnitCatalogueV2Tests and VentilationUnitCatalogueV3Tests - so this uses
+                    //a version still one further out.)
                     entries = entry_60 + "," + entry_90;
-                    schema = "VentilationUnitCatalogue:v3";
+                    schema = "VentilationUnitCatalogue:v4";
                     break;
 
                 default:
