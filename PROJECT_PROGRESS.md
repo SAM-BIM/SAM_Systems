@@ -27,6 +27,10 @@ from per-unit cooling settings. Generic: no TAS identifiers, no product names.
 - `SAM.Analytical.Systems.Tests` 203/203 (+27).
 - Licensed acceptance: `SAM_UI/documentation/evidence/PR5B-PRODUCTION-ACCEPTANCE.md`.
 
+## Maintenance (2026-09-22): .NET Framework app.config cleanup - merged
+
+Part of the repo-family .NET Framework `app.config` cleanup: base [SAM#126](https://github.com/SAM-BIM/SAM/pull/126) plus 17 sibling PRs, all merged into `sow/2026-Q3` on 2026-09-22 (SAM first), with their branches deleted. Here: [SAM_Systems#26](https://github.com/SAM-BIM/SAM_Systems/pull/26) merged as `f010a747` - deleted `Grasshopper/SAM.Analytical.Grasshopper.Systems/app.config`, `SAM_Systems/SAM.Analytical.Systems/app.config`. Both were net472-era binding-redirect files in net8.0/netstandard2.0 Library projects (never read at runtime). Validated by a full `BuildAlls_v4.bat` clean rebuild (exit 0, 0 errors) and CI build + spdx. No behaviour change and nothing further to do for this cleanup. The Part O entries below are unaffected.
+
 ## Previous: PR5A SAM_Systems slice
 `feature/parto-pr5a-unit-settings`, branched from `sow/2026-Q3` at **`a0395dc9`** (SAM_Systems #22, DHW
 plant-room template fix). Merged as #23 (`5213ba9`).
