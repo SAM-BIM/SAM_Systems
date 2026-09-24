@@ -2,7 +2,7 @@
 
 ## Current: Nuaire reply (24 Sep 2026) - exchanger then DX drop, 13 C floor
 
-**Status.** On `feature/parto-nuaire-reply-2026-09-24`. PRs, merged in order: SAM-BIM/SAM#133 -> SAM-BIM/SAM_Systems#29 ->
+**Status.** On `feature/parto-nuaire-reply-2026-09-24`. PRs OPEN (not merged yet; merge in this order): SAM-BIM/SAM#133 -> SAM-BIM/SAM_Systems#29 ->
 SAM-BIM/SAM_Tas#65 -> SAM-BIM/SAM_UI#107. The full cross-repo record (evidence, decisions, TAS probes, MG
 acceptance, residual uncertainties) is in SAM's `PROJECT_PROGRESS.md`, *Current* entry.
 
@@ -40,7 +40,7 @@ in all four repos.
 are listed in SAM's `PROJECT_PROGRESS.md`.
 
 
-## Branch
+## Previous: SAM#123 manufacturer-guidance catalogue branch record (superseded: merged 2026-09-24 via SAM_Systems#25; its 18 C / 70-90 l/s / intake-offset figures are replaced by the current entry)
 `feature/parto-nuaire-manufacturer-guidance`, branched from `sow/2026-Q3` at **`05ca0c1`** (PR5B, #24 merged).
 PR against `sow/2026-Q3`, **not merged**. Merge order for this work: SAM -> SAM_Systems -> (SAM_Tas -> SAM_UI,
 still to come).
