@@ -269,6 +269,33 @@ namespace SAM.Analytical.Systems.Tests
             Assert.Equal(VentilationUnitOperatingMode.Undefined, ventilationUnitOperatingMode_NoRoom);
         }
 
+        /// <summary>
+        /// The shipped entry resolves to manufacturer-guidance settings for a dwelling: the elevated operating
+        /// airflow is the midpoint of the stated cooling range, within the unit's capacity, the cooling rule
+        /// states its offset there, and the product's table carries the capacity bound the grounding reads.
+        /// </summary>
+        [Fact]
+        public void TheShippedHybridEntry_ResolvesToGuidanceSettings()
+        {
+            VentilationUnitTemplate ventilationUnitTemplate = ShippedHybridTemplate();
+
+            MechanicalVentilationGuidanceSettings mechanicalVentilationGuidanceSettings = ventilationUnitTemplate.MechanicalVentilationGuidanceSettings(out string refusal);
+
+            Assert.Null(refusal);
+            Assert.NotNull(mechanicalVentilationGuidanceSettings);
+            Assert.Null(mechanicalVentilationGuidanceSettings.Refusal());
+
+            VentilationUnitOperatingStrategy strategy = mechanicalVentilationGuidanceSettings.OperatingStrategy;
+            Assert.Equal(80.0, strategy.ElevatedAirFlow_Lps, tolerance);
+            Assert.Equal(14.5, strategy.CoolingSupplyTemperatureRule.IntakeOffset_K(strategy.ElevatedAirFlow_Lps), tolerance);
+            Assert.Null(strategy.CoolingSupplyTemperatureRule.AirFlowDomainCondition(strategy.ElevatedAirFlow_Lps));
+            Assert.NotNull(mechanicalVentilationGuidanceSettings.SupplyAirTemperatureTable.Output(VentilationUnitPerformanceOutput.Name_CombinedCoolingCapacity));
+            Assert.Contains("MRXBOX", mechanicalVentilationGuidanceSettings.SourceIdentifier, StringComparison.Ordinal);
+
+            //The catalogue entry itself stays unresolved - a dwelling's choice is never written back into it.
+            Assert.True(double.IsNaN(ventilationUnitTemplate.OperatingStrategy.ElevatedAirFlow_Lps));
+        }
+
         // =================================================================================================
         // Fixtures
         // =================================================================================================
