@@ -289,7 +289,7 @@ namespace SAM.Analytical.Systems.Tests
         /// <summary>
         /// The shipped entry resolves to manufacturer-guidance settings for a dwelling: the elevated operating
         /// airflow is the manufacturer's stated default (80 l/s), within the unit's capacity, the cooling rule
-        /// states its figures there, and the product's table carries the capacity bound the grounding reads.
+        /// states its figures there, and the product's published table travels with the settings.
         /// </summary>
         [Fact]
         public void TheShippedHybridEntry_ResolvesToGuidanceSettings()

@@ -10,7 +10,7 @@ namespace SAM.Analytical.Systems
         /// <summary>
         /// SAM#123: a selected product's manufacturer-guidance settings for one dwelling unit - its catalogue
         /// operating strategy resolved to an elevated operating airflow, with the product's own published
-        /// table (which states the cooling capacity bound) and a traceable source identifier.
+        /// table and a traceable source identifier.
         /// <para>
         /// <b>The elevated airflow is an operating airflow, not a capacity.</b> The dwelling's own figure where the
         /// strategy states one; otherwise the default the manufacturer states; otherwise the midpoint of the range
