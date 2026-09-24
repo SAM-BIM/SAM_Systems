@@ -62,7 +62,7 @@ had to move: the shipped tag is v3, and the "unrecognised future version" fixtur
 
 **Validation.** `SAM.Analytical.Systems.Tests` Release: **242 passed, 0 failed, 0 skipped** - 203 before this
 work plus 39 new. Release build clean. `git diff --check` clean. Requires SAM at
-`feature/parto-nuaire-manufacturer-guidance` (the `OperatingStrategy` vocabulary) built into `SAMuild`.
+`feature/parto-nuaire-manufacturer-guidance` (the `OperatingStrategy` vocabulary) built into `SAM\build`.
 
 **Unresolved / next: the materialisation and its native grounding - seam now measured, not assumed.**
 
@@ -106,6 +106,24 @@ extract with its terminal proportionality.
 B0 and B4 are untouched by everything above.
 
 ## Current: SAM#123 manufacturer guidance - Iteration 3 mode "Selected product - manufacturer guidance" (2026-09-24)
+
+**Final integration review (2026-09-24, before merge).** One consolidated review of all four branches
+against `sow/2026-Q3`; no blockers, no code changed at review.
+- Each branch merges into current `sow/2026-Q3` without conflicts. The diffs are limited to the #123 guidance
+  scope. The new public surface is additive, and a template, settings or route without guidance serialises
+  and materialises as before.
+- Local tests on the branch heads: SAM.Tests 2218/2218, SAM.Analytical.Systems.Tests 251/251,
+  SAM.Analytical.Tas.TM59.Tests 938/938 (7 guidance-cooling), SAM.Analytical.UI.WPF.Tests 1031/1031.
+  SAM#125 and SAM_Systems#25 CI green.
+- Evidence re-checked on disk:
+  - B0 TM59 reports equal the 2026-09-23 ones except the `Source:` path line.
+  - The Resume MG TM59 report equals the in-session MG one except the path line. The hourly comparison agrees
+    to 3 d.p. (bias 0.5672 vs 0.5674 K). It is not bit-identical, because Resume ran a fresh 1a.
+- Non-blocking findings (JSON edge cases, read-back strictness, stale comments, test gaps) are in
+  [SAM#130](https://github.com/SAM-BIM/SAM/issues/130). They were deliberately not fixed, so that the merged code is
+  the accepted code.
+- The DisplacementVent wet-room issue is [SAM#129](https://github.com/SAM-BIM/SAM/issues/129). It is not changed here.
+- Wording: "certified" appears only in negations; values stay PROVISIONAL pending Nuaire.
 
 **Status.** The work is implemented and accepted on the representative model. All values are provisional
 Nuaire guidance; Nuaire was emailed and has not yet confirmed. Nothing is merged. The branch is
