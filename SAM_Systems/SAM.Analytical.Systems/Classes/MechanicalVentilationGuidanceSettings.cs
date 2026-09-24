@@ -113,6 +113,22 @@ namespace SAM.Analytical.Systems
             out Analytical.Enums.VentilationUnitOperatingMode ventilationUnitOperatingMode,
             out double operatingAirFlowRate_Lps)
         {
+            return SupplyTemperature(intakeTemperature_C, extractTemperature_C, double.NaN, designAirFlowRate_Lps, out ventilationUnitOperatingMode, out operatingAirFlowRate_Lps);
+        }
+
+        /// <summary>
+        /// As <see cref="SupplyTemperature(double, double, double, out Analytical.Enums.VentilationUnitOperatingMode, out double)"/>,
+        /// with the temperature [degC] of the room hosting the cooling-stat - required when the strategy's
+        /// cooling is switched by a room stat rather than by the extract.
+        /// </summary>
+        public double SupplyTemperature(
+            double intakeTemperature_C,
+            double extractTemperature_C,
+            double roomTemperature_C,
+            double designAirFlowRate_Lps,
+            out Analytical.Enums.VentilationUnitOperatingMode ventilationUnitOperatingMode,
+            out double operatingAirFlowRate_Lps)
+        {
             ventilationUnitOperatingMode = Analytical.Enums.VentilationUnitOperatingMode.Undefined;
             operatingAirFlowRate_Lps = double.NaN;
 
@@ -124,6 +140,7 @@ namespace SAM.Analytical.Systems
             return OperatingStrategy.SupplyTemperature(
                 intakeTemperature_C,
                 extractTemperature_C,
+                roomTemperature_C,
                 designAirFlowRate_Lps,
                 SupplyAirTemperatureTable,
                 out ventilationUnitOperatingMode,

@@ -164,9 +164,17 @@ namespace SAM.Analytical.Systems.Tests
             Assert.Equal(SupplyTemperatureRuleType.LinearBlend, ventilationUnitOperatingStrategy.HeatCoolthRecoverySupplyTemperatureRule.SupplyTemperatureRuleType);
             Assert.Equal(0.8, ventilationUnitOperatingStrategy.HeatCoolthRecoverySupplyTemperatureRule.ExtractFraction, tolerance);
 
-            Assert.Equal(SupplyTemperatureRuleType.PerformanceTable, ventilationUnitOperatingStrategy.CoolingSupplyTemperatureRule.SupplyTemperatureRuleType);
-            Assert.Equal(16.0, ventilationUnitOperatingStrategy.CoolingSupplyTemperatureRule.MinimumSupplyTemperature_C, tolerance);
-            Assert.Equal(PerformanceDomainPolicy.ClampToDomain, ventilationUnitOperatingStrategy.CoolingSupplyTemperatureRule.PerformanceDomainPolicy);
+            //Cooling: intake less the stated offset per cooling airflow, no floor (the 16 degC limit was
+            //withdrawn by the manufacturer), nothing stated outside the published airflows.
+            SupplyTemperatureRule supplyTemperatureRule_Cooling = ventilationUnitOperatingStrategy.CoolingSupplyTemperatureRule;
+            Assert.Equal(SupplyTemperatureRuleType.IntakeOffset, supplyTemperatureRule_Cooling.SupplyTemperatureRuleType);
+            Assert.Equal(new[] { 70.0, 80.0, 90.0, 100.0, 110.0 }, supplyTemperatureRule_Cooling.AirFlowRates_Lps);
+            Assert.Equal(new[] { 15.0, 14.5, 14.0, 13.5, 13.0 }, supplyTemperatureRule_Cooling.IntakeOffsets_K);
+            Assert.True(double.IsNaN(supplyTemperatureRule_Cooling.MinimumSupplyTemperature_C));
+            Assert.Equal(PerformanceDomainPolicy.Refuse, supplyTemperatureRule_Cooling.PerformanceDomainPolicy);
+
+            //Cooling is switched by the room cooling-stat; bypass and recovery stay on the extract.
+            Assert.Equal(CoolingActivationSignal.RoomTemperature, ventilationUnitOperatingStrategy.CoolingActivationSignal);
         }
 
         /// <summary>
@@ -187,6 +195,10 @@ namespace SAM.Analytical.Systems.Tests
 
             //The document's own restriction is why nothing of it but these figures is in the repository.
             Assert.Contains("not committed", source, StringComparison.OrdinalIgnoreCase);
+
+            //The cooling rule cites the instruction that withdrew the 16 degC floor, and says it is provisional.
+            Assert.Contains("13 Aug 2025", source, StringComparison.Ordinal);
+            Assert.Contains("PROVISIONAL", source, StringComparison.Ordinal);
         }
 
         /// <summary>
@@ -233,26 +245,28 @@ namespace SAM.Analytical.Systems.Tests
 
             Assert.Null(ventilationUnitOperatingStrategy.Refusal());
 
-            //Bypass: intake air, whatever the table says.
-            Assert.Equal(15.0, ventilationUnitOperatingStrategy.SupplyTemperature(15.0, 21.0, 30.0, ventilationUnitTemplate.PerformanceTable, out VentilationUnitOperatingMode ventilationUnitOperatingMode_Bypass, out double airFlow_Bypass), tolerance);
+            //Bypass: intake air (room below the stat, extract above intake and 18 degC).
+            Assert.Equal(15.0, ventilationUnitOperatingStrategy.SupplyTemperature(15.0, 21.0, 21.0, 30.0, ventilationUnitTemplate.PerformanceTable, out VentilationUnitOperatingMode ventilationUnitOperatingMode_Bypass, out double airFlow_Bypass), tolerance);
             Assert.Equal(VentilationUnitOperatingMode.SummerBypass, ventilationUnitOperatingMode_Bypass);
             Assert.Equal(30.0, airFlow_Bypass, tolerance);
 
-            //Recovery: the stated blend.
-            Assert.Equal((0.8 * 20.0) + (0.2 * 5.0), ventilationUnitOperatingStrategy.SupplyTemperature(5.0, 20.0, 30.0, ventilationUnitTemplate.PerformanceTable, out VentilationUnitOperatingMode ventilationUnitOperatingMode_Recovery, out _), tolerance);
+            //Recovery: the stated blend - a warm extract with a room below the stat does not cool.
+            Assert.Equal((0.8 * 25.0) + (0.2 * 5.0), ventilationUnitOperatingStrategy.SupplyTemperature(5.0, 25.0, 20.0, 30.0, ventilationUnitTemplate.PerformanceTable, out VentilationUnitOperatingMode ventilationUnitOperatingMode_Recovery, out _), tolerance);
             Assert.Equal(VentilationUnitOperatingMode.HeatCoolthRecovery, ventilationUnitOperatingMode_Recovery);
 
-            //Cooling: the published table, at the elevated airflow, floored at the stated minimum.
-            double supplyTemperature_C = ventilationUnitOperatingStrategy.SupplyTemperature(32.0, 24.0, 30.0, ventilationUnitTemplate.PerformanceTable, out VentilationUnitOperatingMode ventilationUnitOperatingMode_Cooling, out double airFlow_Cooling);
+            //Cooling: room above the stat -> intake less X at the elevated airflow (90 l/s -> 14 K), no floor.
+            double supplyTemperature_C = ventilationUnitOperatingStrategy.SupplyTemperature(32.0, 24.0, 23.0, 30.0, ventilationUnitTemplate.PerformanceTable, out VentilationUnitOperatingMode ventilationUnitOperatingMode_Cooling, out double airFlow_Cooling);
 
             Assert.Equal(VentilationUnitOperatingMode.Cooling, ventilationUnitOperatingMode_Cooling);
             Assert.Equal(90.0, airFlow_Cooling, tolerance);
-            Assert.Equal(17.8, supplyTemperature_C, 1e-6);
+            Assert.Equal(18.0, supplyTemperature_C, tolerance);
 
-            //And the floor bites where the published table goes below it - the lowest cell of the table is
-            //below 16 degC, and the rule's answer is not.
-            Assert.Equal(16.0, ventilationUnitOperatingStrategy.WithElevatedAirFlow(70.0).SupplyTemperature(29.0, 23.0, 30.0, ventilationUnitTemplate.PerformanceTable, out _, out _), tolerance);
-            Assert.Equal(15.2, ventilationUnitTemplate.PerformanceTable.Value(VentilationUnitPerformanceOutput.Name_SupplyAirTemperature, [29.0, 23.0, 70.0], PerformanceDomainPolicy.ClampToDomain), 1e-6);
+            //The withdrawn floor no longer bites: 29 degC at 70 l/s is 14 degC, below the old 16.
+            Assert.Equal(14.0, ventilationUnitOperatingStrategy.WithElevatedAirFlow(70.0).SupplyTemperature(29.0, 23.0, 23.0, 30.0, ventilationUnitTemplate.PerformanceTable, out _, out _), tolerance);
+
+            //A room-stat entry is never evaluated on the extract alone.
+            Assert.True(double.IsNaN(ventilationUnitOperatingStrategy.SupplyTemperature(32.0, 24.0, 30.0, ventilationUnitTemplate.PerformanceTable, out VentilationUnitOperatingMode ventilationUnitOperatingMode_NoRoom, out _)));
+            Assert.Equal(VentilationUnitOperatingMode.Undefined, ventilationUnitOperatingMode_NoRoom);
         }
 
         // =================================================================================================

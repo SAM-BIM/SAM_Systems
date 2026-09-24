@@ -363,8 +363,9 @@
       },
       "OperatingStrategy": {
         "_type": "SAM.Analytical.VentilationUnitOperatingStrategy,SAM.Analytical",
-        "Source": "Nuaire manufacturer technical guidance received directly 2026-09-18 - 'Simplified Hybrid Cooling Guidance for IES', Nuaire, 07-08-2025, for MRXBOXAB-ECO5-AECV operating with MR-ECO-COOL-V. HELD PRIVATELY AND NOT REDISTRIBUTABLE: the document is not committed, attached or quoted anywhere in these repositories, and only the figures below are transcribed from it. A local hashed manifest records the document, its date, its SHA-256 and which requirement each figure came from. MANUFACTURER MODELLING GUIDANCE, NOT CERTIFIED PERFORMANCE: the guidance states how Nuaire recommends this unit's control behaviour be represented in a dynamic thermal model. It is not an EN 13141-7 / SAP certified heat-recovery efficiency and not a certified specific fan power, it satisfies neither, and this entry carries neither HeatRecoveryPerformance nor FanPerformance because of it. The extract fraction below is a PACKAGE supply-temperature rule from that guidance and must never be written into a certified heat-recovery field. Corroborated for the two background modes by Nuaire's 'Simplified SW guidelines for IES', 29-07-2024, whose bypass and heat/coolth recovery conditions are identical - but that document is for the MRXBOXAB-ECO*-SW, a different product whose third mode is an all-air purge inhibited when outdoor air is warmer than extract, and that behaviour is deliberately NOT transcribed here: for this hybrid cooling product the guidance states outdoor temperature has no influence on cooling activation.",
+        "Source": "Nuaire manufacturer technical guidance received directly 2026-09-18 - 'Simplified Hybrid Cooling Guidance for IES', Nuaire, 07-08-2025, for MRXBOXAB-ECO5-AECV operating with MR-ECO-COOL-V. HELD PRIVATELY AND NOT REDISTRIBUTABLE: the document is not committed, attached or quoted anywhere in these repositories, and only the figures below are transcribed from it. A local hashed manifest records the document, its date, its SHA-256 and which requirement each figure came from. MANUFACTURER MODELLING GUIDANCE, NOT CERTIFIED PERFORMANCE: the guidance states how Nuaire recommends this unit's control behaviour be represented in a dynamic thermal model. It is not an EN 13141-7 / SAP certified heat-recovery efficiency and not a certified specific fan power, it satisfies neither, and this entry carries neither HeatRecoveryPerformance nor FanPerformance because of it. The extract fraction below is a PACKAGE supply-temperature rule from that guidance and must never be written into a certified heat-recovery field. Corroborated for the two background modes by Nuaire's 'Simplified SW guidelines for IES', 29-07-2024, whose bypass and heat/coolth recovery conditions are identical - but that document is for the MRXBOXAB-ECO*-SW, a different product whose third mode is an all-air purge inhibited when outdoor air is warmer than extract, and that behaviour is deliberately NOT transcribed here: for this hybrid cooling product the guidance states outdoor temperature has no influence on cooling activation. COOLING SUPPLY RULE (revised 2026-09-24): Nuaire email of 13 Aug 2025 (forwarded with the guidance) withdraws the 16 degC low limit on supply air - the supply air temperature while cooling is intake minus the average offset X stated per cooling airflow (70/80/90/100/110 l/s -> 15/14.5/14/13.5/13 K); no floor is applied and no offset is stated outside 70-110 l/s. COOLING ACTIVATION SIGNAL: the room cooling-stat (the guidance's room temperature sensor / the brochure's wall-mounted cooling-stat); bypass and recovery stay on the unit's integral extract sensor. PROVISIONAL: the activation signal location, X selection versus airflow and behaviour below the published 29-34 degC range are awaiting written Nuaire confirmation (queried with Nuaire, Sep 2026); results using this entry are manufacturer guidance, not certified performance.",
         "CoolingActivationTemperature_C": 22.0,
+        "CoolingActivationSignal": "RoomTemperature",
         "MinimumCoolingActivationTemperature_C": 22.0,
         "MaximumCoolingActivationTemperature_C": 25.0,
         "BypassMinimumIntakeTemperature_C": 12.0,
@@ -384,9 +385,10 @@
         },
         "CoolingSupplyTemperatureRule": {
           "_type": "SAM.Analytical.SupplyTemperatureRule,SAM.Analytical",
-          "SupplyTemperatureRuleType": "PerformanceTable",
-          "MinimumSupplyTemperature_C": 16.0,
-          "PerformanceDomainPolicy": "ClampToDomain"
+          "SupplyTemperatureRuleType": "IntakeOffset",
+          "AirFlowRates_Lps": [ 70.0, 80.0, 90.0, 100.0, 110.0 ],
+          "IntakeOffsets_K": [ 15.0, 14.5, 14.0, 13.5, 13.0 ],
+          "PerformanceDomainPolicy": "Refuse"
         }
       }
     },
