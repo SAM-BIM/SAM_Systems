@@ -94,13 +94,30 @@ namespace SAM.Analytical.Systems
 
         private readonly List<MechanicalVentilationRecirculationCooling> recirculationCoolings;
 
+        /// <summary>SAM#123: the manufacturer-guidance cooling units this materialisation built, one per unit.</summary>
+        public List<MechanicalVentilationGuidanceCooling> GuidanceCoolings
+        {
+            get
+            {
+                return new List<MechanicalVentilationGuidanceCooling>(guidanceCoolings);
+            }
+        }
+
+        private readonly List<MechanicalVentilationGuidanceCooling> guidanceCoolings;
+
         public MechanicalVentilationMaterialisation(Core.Systems.SystemEnergyCentre systemEnergyCentre, IEnumerable<string> refusals, IEnumerable<string> notes, IEnumerable<MechanicalVentilationBinding> bindings)
             : this(systemEnergyCentre, refusals, notes, bindings, null)
         {
         }
 
         public MechanicalVentilationMaterialisation(Core.Systems.SystemEnergyCentre systemEnergyCentre, IEnumerable<string> refusals, IEnumerable<string> notes, IEnumerable<MechanicalVentilationBinding> bindings, IEnumerable<MechanicalVentilationRecirculationCooling> recirculationCoolings)
+            : this(systemEnergyCentre, refusals, notes, bindings, recirculationCoolings, null)
         {
+        }
+
+        public MechanicalVentilationMaterialisation(Core.Systems.SystemEnergyCentre systemEnergyCentre, IEnumerable<string> refusals, IEnumerable<string> notes, IEnumerable<MechanicalVentilationBinding> bindings, IEnumerable<MechanicalVentilationRecirculationCooling> recirculationCoolings, IEnumerable<MechanicalVentilationGuidanceCooling> guidanceCoolings)
+        {
+            this.guidanceCoolings = guidanceCoolings == null ? new List<MechanicalVentilationGuidanceCooling>() : new List<MechanicalVentilationGuidanceCooling>(guidanceCoolings);
             this.refusals = refusals == null ? new List<string>() : new List<string>(refusals);
             this.notes = notes == null ? new List<string>() : new List<string>(notes);
             this.bindings = bindings == null ? new List<MechanicalVentilationBinding>() : new List<MechanicalVentilationBinding>(bindings);
@@ -115,6 +132,7 @@ namespace SAM.Analytical.Systems
                 this.notes.Clear();
                 this.bindings.Clear();
                 this.recirculationCoolings.Clear();
+                this.guidanceCoolings.Clear();
             }
         }
     }

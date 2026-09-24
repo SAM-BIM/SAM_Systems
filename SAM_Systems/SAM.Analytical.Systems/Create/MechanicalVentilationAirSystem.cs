@@ -31,7 +31,7 @@ namespace SAM.Analytical.Systems
         /// PR5B (SAM#111): this unit's aggregate cooling module, materialised as an internal recirculation
         /// branch inside this unit's own air system - or null for none.
         /// </param>
-        internal static bool MechanicalVentilationAirSystem(MechanicalVentilationContext context, SystemPlantRoom systemPlantRoom, AirSystem airSystem_Template, AirHandlingUnit airHandlingUnit, List<Guid> spaceGuids, MechanicalVentilationUnitSettings mechanicalVentilationUnitSettings = null, MechanicalVentilationCoolingSettings mechanicalVentilationCoolingSettings = null)
+        internal static bool MechanicalVentilationAirSystem(MechanicalVentilationContext context, SystemPlantRoom systemPlantRoom, AirSystem airSystem_Template, AirHandlingUnit airHandlingUnit, List<Guid> spaceGuids, MechanicalVentilationUnitSettings mechanicalVentilationUnitSettings = null, MechanicalVentilationCoolingSettings mechanicalVentilationCoolingSettings = null, MechanicalVentilationGuidanceSettings mechanicalVentilationGuidanceSettings = null)
         {
             //---------------------------------------------------------------------------------------------
             //The air-system key. Every per-unit identity below derives through it, and it carries the
@@ -204,6 +204,37 @@ namespace SAM.Analytical.Systems
                 && !TryGetUnitFans(context, systemPlantRoom, dictionary_Rekey, dictionary_New, airHandlingUnit, "has a cooling module", out systemFan_Supply_Cooling, out SystemFan _))
             {
                 return false;
+            }
+
+            //SAM#123: a manufacturer-guidance unit needs its exchanger and both fans, found the same way and at
+            //the same time - while the template's own prototype connections still say which fan is which.
+            SystemFan systemFan_Supply_Guidance = null;
+            SystemFan systemFan_Extract_Guidance = null;
+            SystemExchanger systemExchanger_Guidance = null;
+
+            if (mechanicalVentilationGuidanceSettings != null)
+            {
+                if (!TryGetUnitFans(context, systemPlantRoom, dictionary_Rekey, dictionary_New, airHandlingUnit, "has a manufacturer-guidance cooling unit", out systemFan_Supply_Guidance, out systemFan_Extract_Guidance))
+                {
+                    return false;
+                }
+
+                int count_Exchanger_Guidance = 0;
+
+                foreach (ISystemJSAMObject systemJSAMObject_Exchanger in dictionary_New.Values)
+                {
+                    if (systemJSAMObject_Exchanger is SystemExchanger systemExchanger_Temp)
+                    {
+                        systemExchanger_Guidance = systemExchanger_Temp;
+                        count_Exchanger_Guidance++;
+                    }
+                }
+
+                if (count_Exchanger_Guidance != 1)
+                {
+                    context.Refuse(string.Format("Air handling unit '{0}' has a manufacturer-guidance cooling unit, but its topology template's air-system copy carries {1} heat exchanger(s) - the product's arrangement needs exactly one.", airHandlingUnit.Name, count_Exchanger_Guidance));
+                    return false;
+                }
             }
 
             //Re-point every copied connection at the copies, before anything is added - SystemPlantRoom.Add
@@ -521,6 +552,13 @@ namespace SAM.Analytical.Systems
             //of the recirculation dampers.
             if (mechanicalVentilationCoolingSettings != null
                 && !MechanicalVentilationRecirculationCooling(context, systemPlantRoom, airSystem, airHandlingUnit, key_AirSystem, spaceGuids, systemFan_Supply_Cooling, systemComponent_Supply, mechanicalVentilationCoolingSettings))
+            {
+                return false;
+            }
+
+            //SAM#123: the product's supply DX coil, after the exchanger, on the rooms just materialised.
+            if (mechanicalVentilationGuidanceSettings != null
+                && !MechanicalVentilationGuidanceCooling(context, systemPlantRoom, airSystem, airHandlingUnit, key_AirSystem, spaceGuids, systemExchanger_Guidance, systemFan_Supply_Guidance, systemFan_Extract_Guidance, mechanicalVentilationGuidanceSettings))
             {
                 return false;
             }

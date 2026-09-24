@@ -119,6 +119,40 @@ namespace SAM.Analytical.Systems
             }
         }
 
+        private Dictionary<Guid, MechanicalVentilationGuidanceSettings> dictionary_GuidanceSettings = new Dictionary<Guid, MechanicalVentilationGuidanceSettings>();
+
+        /// <summary>
+        /// SAM#123: each physical air handling unit's selected product operated to its manufacturer's
+        /// guidance, keyed by the analytical <c>AirHandlingUnit.Guid</c> - materialised as the product's own
+        /// arrangement (MVRE exchanger plus a supply DX coil), see <see cref="MechanicalVentilationGuidanceSettings"/>.
+        /// <para>
+        /// Empty (the default) materialises exactly as before. A non-empty dictionary has to name every unit
+        /// the call materialises and nothing else, and cannot be combined with <see cref="CoolingSettings"/>
+        /// (the B4 recirculation branch) - a unit is cooled one way or the other, never both.
+        /// </para>
+        /// </summary>
+        public IReadOnlyDictionary<Guid, MechanicalVentilationGuidanceSettings> GuidanceSettings
+        {
+            get
+            {
+                return dictionary_GuidanceSettings;
+            }
+            set
+            {
+                Dictionary<Guid, MechanicalVentilationGuidanceSettings> dictionary = new Dictionary<Guid, MechanicalVentilationGuidanceSettings>();
+
+                if (value != null)
+                {
+                    foreach (KeyValuePair<Guid, MechanicalVentilationGuidanceSettings> keyValuePair in value)
+                    {
+                        dictionary[keyValuePair.Key] = keyValuePair.Value == null ? null : new MechanicalVentilationGuidanceSettings(keyValuePair.Value);
+                    }
+                }
+
+                dictionary_GuidanceSettings = dictionary;
+            }
+        }
+
         public MechanicalVentilationSettings()
         {
 
@@ -133,6 +167,7 @@ namespace SAM.Analytical.Systems
                 MaterialiseSystemSpaceComponents = mechanicalVentilationSettings.MaterialiseSystemSpaceComponents;
                 UnitSettings = mechanicalVentilationSettings.UnitSettings;
                 CoolingSettings = mechanicalVentilationSettings.CoolingSettings;
+                GuidanceSettings = mechanicalVentilationSettings.GuidanceSettings;
             }
         }
 
@@ -193,6 +228,21 @@ namespace SAM.Analytical.Systems
                 dictionary_CoolingSettings = dictionary;
             }
 
+            if (jsonObject["GuidanceSettings"] is JsonObject jsonObject_GuidanceSettings)
+            {
+                Dictionary<Guid, MechanicalVentilationGuidanceSettings> dictionary = new Dictionary<Guid, MechanicalVentilationGuidanceSettings>();
+
+                foreach (KeyValuePair<string, JsonNode> keyValuePair in jsonObject_GuidanceSettings)
+                {
+                    if (Guid.TryParse(keyValuePair.Key, out Guid guid) && keyValuePair.Value is JsonObject jsonObject_Value)
+                    {
+                        dictionary[guid] = new MechanicalVentilationGuidanceSettings(jsonObject_Value);
+                    }
+                }
+
+                dictionary_GuidanceSettings = dictionary;
+            }
+
             return true;
         }
 
@@ -237,6 +287,19 @@ namespace SAM.Analytical.Systems
                 }
 
                 result.Add("CoolingSettings", jsonObject_CoolingSettings);
+            }
+
+            //Omitted when empty, so a B0 or B4 settings object serializes exactly as it did before.
+            if (dictionary_GuidanceSettings.Count != 0)
+            {
+                JsonObject jsonObject_GuidanceSettings = new JsonObject();
+
+                foreach (KeyValuePair<Guid, MechanicalVentilationGuidanceSettings> keyValuePair in dictionary_GuidanceSettings)
+                {
+                    jsonObject_GuidanceSettings.Add(keyValuePair.Key.ToString(), keyValuePair.Value?.ToJsonObject());
+                }
+
+                result.Add("GuidanceSettings", jsonObject_GuidanceSettings);
             }
 
             return result;

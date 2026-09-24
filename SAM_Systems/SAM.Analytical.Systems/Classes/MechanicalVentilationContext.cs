@@ -39,6 +39,9 @@ namespace SAM.Analytical.Systems
         /// <summary>PR5B: every recirculation cooling branch materialised so far.</summary>
         internal List<MechanicalVentilationRecirculationCooling> RecirculationCoolings { get; } = new List<MechanicalVentilationRecirculationCooling>();
 
+        /// <summary>SAM#123: every manufacturer-guidance cooling unit materialised so far.</summary>
+        internal List<MechanicalVentilationGuidanceCooling> GuidanceCoolings { get; } = new List<MechanicalVentilationGuidanceCooling>();
+
         /// <summary>
         /// Whether every design terminal of a unit's systems reached a materialised space - false where
         /// the caller's scope clipped some of them.
