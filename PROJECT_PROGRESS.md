@@ -1,8 +1,210 @@
 # Project Progress
 
 ## Branch
+`feature/parto-nuaire-manufacturer-guidance`, branched from `sow/2026-Q3` at **`05ca0c1`** (PR5B, #24 merged).
+PR against `sow/2026-Q3`, **not merged**. Merge order for this work: SAM -> SAM_Systems -> (SAM_Tas -> SAM_UI,
+still to come).
+
+**SAM#123 - manufacturer guidance track: catalogue entry, resolved per-unit strategy, elevated-flow policy.**
+Direct manufacturer modelling guidance for the shipped domestic hybrid cooling product was received on
+2026-09-18 and supersedes #123's recorded position that manufacturer bypass thresholds are unavailable **for
+that product**. This slice is additive; no existing behaviour changed.
+
+- **Catalogue, schema `VentilationUnitCatalogue:v3`.** A template may now carry its manufacturer's own
+  modelling `OperatingStrategy` (the vocabulary is SAM's, added in the same work). v1 and v2 stay legal and
+  stay exactly what they meant; all three tags are accepted identically, and the field is optional on every
+  one of them. Present-and-unusable refuses the whole catalogue, exactly as every other optional field does -
+  checked with `TemplateRefusal()`, because a catalogue states a manufacturer's thresholds, rules and ranges
+  and **not** the elevated cooling airflow one dwelling is assessed at.
+- **The shipped domestic hybrid entry carries the transcribed strategy**: cooling on the extract temperature
+  alone above 22 degC (permitted 22-25), bypass above 12 degC intake and 18 degC extract with extract above
+  intake, recovery otherwise; bypass delivers intake air, recovery delivers 0.8 x extract + 0.2 x intake, and
+  cooling reads the entry's existing published supply-air temperature table with a 16 degC floor, held at the
+  published edges. The elevated cooling airflow range is 70-90 l/s; the figure itself is not a catalogue fact.
+- **The source documents are private.** They carry a redistribution restriction and are not committed,
+  attached or quoted. The entry's strategy `Source` states what the document is, who wrote it, when it was
+  received, that it is held privately, and - in terms - that it is **manufacturer modelling guidance and not
+  certified performance**. A local hashed manifest outside every repository records the documents and which
+  requirement each figure came from. Tests pin all of that.
+- **`MechanicalVentilationGuidanceSettings` (new)**: one unit's resolved strategy plus the published table a
+  cooling rule reads, and a `SourceIdentifier` so a persisted result can be revalidated without the document.
+  `Refusal()` refuses rather than repairs. Independent of `MechanicalVentilationUnitSettings`, which carries
+  the **certified** E1/E2 figures and is untouched: carrying guidance produces no certified figure, and the
+  shipped entry still carries neither `HeatRecoveryPerformance` nor `FanPerformance`.
+- **`MechanicalVentilationOperatingFlows` (new)**: divides an elevated operating airflow between rooms in
+  their **design** proportions - each room's share of the elevated total is its own share of the design total,
+  on its own side, with both sides totalling the elevated figure so the unit stays balanced while it cools.
+  The design distribution is read and handed back unchanged. It refuses where there is no usable design
+  distribution rather than falling back to an even split or to floor area, and refuses an "elevated" rate
+  below the design rate rather than clamping it up.
+
+**Decisions.**
+
+1. **A blend fraction is not an exchanger efficiency.** The recovery rule's 0.8 is a package
+   supply-temperature rule from modelling guidance. It is never written into a certified heat-recovery field,
+   and E1/E2 stay open at #123.
+2. **The design proportions are the authority for the elevated distribution**, not floor area. B4's
+   recirculation branch splits its ceiling by floor area and is unchanged; the guidance route holds the
+   design terminal proportions, which is what the manufacturer's guidance requires and is a genuinely
+   different rule. Neither route was changed to look like the other.
+3. **Nothing is materialised yet.** `MechanicalVentilationSettings` is untouched - no guidance dictionary was
+   added - because a settings property nothing materialises would be a half-built path. The materialisation
+   and its native grounding are the next step, and the native seam it needs is recorded under *Unresolved*.
+
+**Files changed.** `SAM_Systems/SAM.Analytical.Systems/Classes/MechanicalVentilationGuidanceSettings.cs`
+(new), `SAM_Systems/SAM.Analytical.Systems/Classes/MechanicalVentilationOperatingFlows.cs` (new),
+`SAM_Systems/SAM.Analytical.Systems/Query/VentilationUnitTemplates.cs` (v3 tag + one optional-field check),
+`files/resources/Analytical/Systems/VentilationUnit/VentilationUnitCatalogue.JSON` (schema tag + one entry's
+`OperatingStrategy`), `SAM.Analytical.Systems.Tests/VentilationUnitCatalogueV3Tests.cs` (new, 15 tests),
+`SAM.Analytical.Systems.Tests/MechanicalVentilationGuidanceTests.cs` (new, 24 tests),
+`SAM.Analytical.Systems.Tests/VentilationUnitCatalogueTests.cs` and `...V2Tests.cs` (the two schema pins that
+had to move: the shipped tag is v3, and the "unrecognised future version" fixture is now v4).
+
+**Validation.** `SAM.Analytical.Systems.Tests` Release: **242 passed, 0 failed, 0 skipped** - 203 before this
+work plus 39 new. Release build clean. `git diff --check` clean. Requires SAM at
+`feature/parto-nuaire-manufacturer-guidance` (the `OperatingStrategy` vocabulary) built into `SAM\build`.
+
+**Unresolved / next: the materialisation and its native grounding - seam now measured, not assumed.**
+
+The native seam was investigated rather than guessed, and then **verified on licensed TAS** before any
+SAM_Tas code is written (evidence: `C:\TasOut\nuaire-guidance\NUAIRE-GUIDANCE-NATIVE-SEAM-PROBE.md`, runs
+under `C:\TasOut\nuaire-guidance\runs`; investigation only, nothing committed from it).
+
+*Why the seam had to be found.* Two of the three modes state the supply temperature as a function of the
+**extract** air. EDSL's own Tas Systems 9.5.7 documentation states that a controller drives a coil by a 0-1
+duty proportion and cannot set its setpoint in degrees, and that only a heat exchanger or an optimiser
+consumes a setpoint-passthrough signal. A coil is single-stream, so on a fresh-air path its own `EDB` is the
+intake air. The extract dependence can therefore only be expressed by a **two-stream** component - the unit's
+exchanger.
+
+*What the probe measured*, on the PR5A fixture MVRE document with the intake forced to 0 degC, plant-room
+`SimulateEx` duct data, 24 hours, three systems:
+
+- a `Setpoint` with `SetpointMethod = 1` is an **absolute package supply-temperature target**: a constant
+  10 degC target produced exactly 10.000 degC in every hour;
+- a `Setpoint` table over `ODB` equal to the intake temperature produced exactly the intake temperature -
+  **the bypass mode, expressed as a target rather than as a mechanism**;
+- `EDB2` resolves exactly to the exchanger's own port-2 (extract) inlet duct state, and energy balances
+  across the component;
+- `SensibleEfficiency` **caps** the target: asked for 0.9 x extract at efficiency 0.7, TAS delivered exactly
+  0.7 and the control's own output. So the efficiency has to be set as a carrier bound above every target the
+  strategy can ask for - never presented as a certified efficiency - and the achieved supply temperature has
+  to be read back;
+- with that carrier, a 0.8 x extract target was met to within 0.001 degC.
+
+*And one result that matters to SAM#123's open EDSL item.* Driving the exchanger by a supply-temperature
+target instead of by an efficiency cut the worst hourly departure from the rule from **2.079 K to 0.466 K**
+over the same hours, with a mean departure of 0.01-0.03 K. The `DisplacementVentilation = true` + active
+heat-recovery discontinuity is **reduced, not removed**: the route must report those hours rather than absorb
+them, and this closes neither the EDSL question nor certified B2.
+
+*Still to establish:* a two-dimensional `Setpoint` table over `(ODB, EDB2)` - SAM_Tas already writes and
+reads back a three-dimensional one on a coil setpoint, so it is the same mechanism, but the exchanger case is
+unexercised; the cooling coil downstream of a setpoint-driven exchanger; and the elevated balanced supply and
+extract with its terminal proportionality.
+
+B0 and B4 are untouched by everything above.
+
+## Current: SAM#123 manufacturer guidance - Iteration 3 mode "Selected product - manufacturer guidance" (2026-09-24)
+
+**Final integration review (2026-09-24, before merge).** One consolidated review of all four branches
+against `sow/2026-Q3`; no blockers, no code changed at review.
+- Each branch merges into current `sow/2026-Q3` without conflicts. The diffs are limited to the #123 guidance
+  scope. The new public surface is additive, and a template, settings or route without guidance serialises
+  and materialises as before.
+- Local tests on the branch heads: SAM.Tests 2218/2218, SAM.Analytical.Systems.Tests 251/251,
+  SAM.Analytical.Tas.TM59.Tests 938/938 (7 guidance-cooling), SAM.Analytical.UI.WPF.Tests 1031/1031.
+  SAM#125 and SAM_Systems#25 CI green.
+- Evidence re-checked on disk:
+  - B0 TM59 reports equal the 2026-09-23 ones except the `Source:` path line.
+  - The Resume MG TM59 report equals the in-session MG one except the path line. The hourly comparison agrees
+    to 3 d.p. (bias 0.5672 vs 0.5674 K). It is not bit-identical, because Resume ran a fresh 1a.
+- Non-blocking findings (JSON edge cases, read-back strictness, stale comments, test gaps) are in
+  [SAM#130](https://github.com/SAM-BIM/SAM/issues/130). They were deliberately not fixed, so that the merged code is
+  the accepted code.
+- The DisplacementVent wet-room issue is [SAM#129](https://github.com/SAM-BIM/SAM/issues/129). It is not changed here.
+- Wording: "certified" appears only in negations; values stay PROVISIONAL pending Nuaire.
+
+**Status.** The work is implemented and accepted on the representative model. All values are provisional
+Nuaire guidance; Nuaire was emailed and has not yet confirmed. Nothing is merged. The branch is
+`feature/parto-nuaire-manufacturer-guidance` in SAM (PR #125), SAM_Systems (PR #25), SAM_Tas (new) and
+SAM_UI (new). Merge order: SAM -> SAM_Systems -> SAM_Tas -> SAM_UI.
+
+**Where it came from.**
+- The Stage 11 TAS prototype passed. Its evidence is under
+  `C:\TasOut\nuaire-guidance\REVIEW2\resume-2026-09-23\evidence\stage11\`.
+- Stage 11b, the production correction, was found on the real model:
+  - Controlled dampers do not converge when a supplied room's only outlet is a transfer damper
+    (MVHR-02/03: more than 20 min for one day, against 3 s with the controllers pinned).
+  - The elevated airflow is now carried on the fans, with the dampers uncontrolled at their elevated share.
+    Room-stat controllers drive the supply and extract fans with Min = (design/elevated)^2, because a
+    controlled fan's airflow goes as the square root of its signal.
+
+**Per repo.**
+- **SAM:**
+  - `SupplyTemperatureRule.IntakeOffset`: `to - X(Q)`, Refuse outside the stated airflows, with reported
+    domain use.
+  - `CoolingActivationSignal` (room / extract).
+  - A room-stat bypass keeps the rule's extract <= activation condition.
+- **SAM_Systems:**
+  - The Nuaire entry uses IntakeOffset 70/80/90/100/110 -> 15/14.5/14/13.5/13 K. There is no 16 C floor
+    (Nuaire, 13 Aug 2025), activation is on the room stat, and the entry is marked PROVISIONAL.
+  - `GuidanceSettings` materialisation: MVRE plus a supply DX coil after the exchanger.
+  - `MechanicalVentilationGuidanceCooling` is the record the TAS grounding reads.
+  - `Query.MechanicalVentilationGuidanceSettings`: the elevated airflow is the midpoint of the stated range
+    (80 l/s), refused above unit capacity.
+- **SAM_Tas:**
+  - `Modify.GroundGuidanceCooling` writes and reads back:
+    - DX room-stat controller: Studio/Bedroom zone, `SensorArc1`, 22.05 / 0.1 K;
+    - fan controllers;
+    - uncontrolled exchanger with an (ODB, EDB2, EFlow) state table;
+    - DX: finite 2200 W (the table's max combined capacity), no gates, `MinimumOffcoil = to - 14.5`.
+  - A disagreement refuses the grounding.
+  - `Modify.GuidanceCoolingResults` gives the hourly read-back.
+- **SAM_UI:**
+  - New mode `SelectedProductManufacturerGuidance`, with `-It3BMG` files, a resolution step with no product
+    constants, and the operation CSV and summaries persisted in the record.
+  - Review-consistency branch for the mode.
+  - Separately: Iteration 3 can start from a completed 1a reopened in a later session.
+    `<project>.prepared.sam` and `<project>.partorun.json` are bound to the TSD, so there is no need to
+    re-run Prepare & Run.
+
+**Acceptance (2026-09-24, real `SAM Analytical.exe`, `SAM_zoningAM-CIBSEfutureZ1.sam` a7e09a25, DSY1 2050s).**
+Evidence is in `C:\TasOut\parto-guidance-2026-09-24\`, outside git.
+- **B0 on the new binaries:** COMPLETE. Both TM59 reports are byte-identical to 2026-09-23; bias 0.05 K,
+  RMSE 0.736 K. So B0 is unchanged.
+- **MG:** COMPLETE in 11.7 min, A Fail / B Fail. TM59 >26 C hours against A:
+  - Studio -68 and bedrooms -101 / -96, where B0 is -6 / +8 / +12;
+  - kitchens -38;
+  - wet rooms -284 to -471 (Bathroom_2 becomes a Pass).
+  - Annual mean bias +0.57 K, RMSE 1.48 K, from heat recovery outside cooling. The DisplacementVent-inflated
+    extract (3.5-6 kh extract > 22 C while room <= 22 C) suppresses bypass. It is a model-hygiene decision
+    and not changed here.
+- **MG TAS read-back, per unit (design -> elevated):**
+  - MVHR-01: 30 -> 80 l/s, supply = extract (< 0.02 l/s). `to - 14.5` is exact in 849/849 full-flow cooling
+    hours that are not capacity-limited. 122 h are at the 2.2 kW total-duty bound.
+  - MVHR-02/03: 63 -> 80 l/s. The law holds in 699/700 and 692/693 such hours; 85 h are capacity-limited.
+  - All units: minimum supply 7.3 C; the stat room peaks at 36.9-39.3 C in a 40 C intake heatwave, with the
+    supply at exactly `to - 14.5`.
+- **Reopen:** a new session opened the saved 1a run and reviewed the MG pairing in 10.8 s with no simulation.
+- **Installed state changed on this machine:**
+  - `Documents\SAM\resources\...\VentilationUnitCatalogue.JSON` is now the v3 feature catalogue. The v1
+    backup is at `C:\TasOut\parto-guidance-2026-09-24\catalogue-backup\documents-SAM-before.json`. Restore it
+    before running `sow` binaries.
+  - `%APPDATA%\SAM\SAM.Analytical.dll`/`SAM.Core.dll` and `SAM.ghlink` were overwritten by a `SAM.sln`
+    build on 2026-09-24 09:44. Redeploy from `sow` to restore Grasshopper.
+
+**Exact next step.**
+1. Review the four `feature/parto-nuaire-manufacturer-guidance` branches.
+2. Merge in order: SAM#125 -> SAM_Systems#25 -> SAM_Tas -> SAM_UI. SAM_Tas and SAM_UI have no PR yet;
+   open them against `sow/2026-Q3`.
+3. Hold any "certified" wording until Nuaire replies (stat location, X vs airflow, low-ambient behaviour,
+   30 l/s).
+4. Separately decide the DisplacementVent hygiene for transfer-fed wet rooms (it affects every mode).
+
+## Previous: PR5B SAM_Systems slice (merged as #24)
 `feature/parto-pr5b-recirculation-cooling`, branched from `sow/2026-Q3` at **`5213ba9`** (PR5A, #23 merged).
-Commit `c36ba11` (+ this docs commit), PR against `sow/2026-Q3`, **not merged**. It is first in the PR5B merge
+Commit `c36ba11` (+ a docs commit); merged into `sow/2026-Q3` as `05ca0c1`. It was first in the PR5B merge
 order: SAM_Systems -> SAM_Tas -> SAM_UI.
 
 **Part O Iteration 3 PR5B - SAM_Systems slice (SAM#111).** A same-AirSystem recirculation cooling branch built

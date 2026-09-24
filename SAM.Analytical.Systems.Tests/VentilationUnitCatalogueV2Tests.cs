@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using SAM.Analytical.Enums;
@@ -137,7 +137,9 @@ namespace SAM.Analytical.Systems.Tests
         [Fact]
         public void AnUnrecognisedSchema_StillRefuses()
         {
-            string directory = TemporaryCatalogue("VentilationUnitCatalogue:v3", Entry("FIXTURE-60", "60", "60"));
+            //v3 itself became an accepted tag under SAM#123 - see VentilationUnitCatalogueV3Tests - so this
+            //uses a version still one further out.
+            string directory = TemporaryCatalogue("VentilationUnitCatalogue:v4", Entry("FIXTURE-60", "60", "60"));
 
             try
             {

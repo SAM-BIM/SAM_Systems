@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
 
 using SAM.Core;
@@ -40,6 +40,25 @@ namespace SAM.Analytical.Systems
         /// </para>
         /// </summary>
         public const string VentilationUnitCatalogueSchemaV2 = "VentilationUnitCatalogue:v2";
+
+        /// <summary>
+        /// The schema tag a catalogue may declare to carry a manufacturer's own modelling
+        /// <c>OperatingStrategy</c> on a template (SAM#123).
+        /// <para>
+        /// <b>v1 and v2 stay legal and stay exactly what they always meant.</b> This reader accepts all
+        /// three tags identically; neither the tag nor the presence of the field is required of a v3 file,
+        /// and a file of any version without it reads as it always did. What v3 adds is only that a template
+        /// <i>may</i> also carry a manufacturer operating strategy - and if it does, it is validated exactly
+        /// as every other optional field here is: present-and-unusable refuses the whole catalogue, absent
+        /// is legal.
+        /// </para>
+        /// <para>
+        /// <b>A strategy is manufacturer modelling guidance and is not certified performance.</b> Carrying
+        /// one says nothing about whether <c>HeatRecoveryPerformance</c> or <c>FanPerformance</c> is
+        /// available, and the two are read, validated and reported separately.
+        /// </para>
+        /// </summary>
+        public const string VentilationUnitCatalogueSchemaV3 = "VentilationUnitCatalogue:v3";
 
         /// <summary>
         /// The manufacturer ventilation unit products this repository ships - what each one is, where its
@@ -92,7 +111,9 @@ namespace SAM.Analytical.Systems
             }
 
             string schema = jsonNode_Schema.GetValue<string>();
-            if (!string.Equals(schema, VentilationUnitCatalogueSchema, StringComparison.Ordinal) && !string.Equals(schema, VentilationUnitCatalogueSchemaV2, StringComparison.Ordinal))
+            if (!string.Equals(schema, VentilationUnitCatalogueSchema, StringComparison.Ordinal)
+                && !string.Equals(schema, VentilationUnitCatalogueSchemaV2, StringComparison.Ordinal)
+                && !string.Equals(schema, VentilationUnitCatalogueSchemaV3, StringComparison.Ordinal))
             {
                 return null;
             }
@@ -151,6 +172,15 @@ namespace SAM.Analytical.Systems
                 }
 
                 if (jsonObject_Template.ContainsKey("FanPerformance") && (ventilationUnitTemplate.FanPerformance == null || !ventilationUnitTemplate.FanPerformance.IsValid))
+                {
+                    return null;
+                }
+
+                //A manufacturer's own modelling strategy (SAM#123) - optional on every version, and checked
+                //the same way. TemplateRefusal rather than Refusal: a catalogue states a manufacturer's
+                //thresholds, rules and ranges, and how far up the elevated cooling range one dwelling goes is
+                //that dwelling's decision, made where the design is known. An entry is complete without it.
+                if (jsonObject_Template.ContainsKey("OperatingStrategy") && (ventilationUnitTemplate.OperatingStrategy == null || ventilationUnitTemplate.OperatingStrategy.TemplateRefusal() != null))
                 {
                     return null;
                 }

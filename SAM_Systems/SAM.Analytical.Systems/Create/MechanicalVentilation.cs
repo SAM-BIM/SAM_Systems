@@ -308,6 +308,13 @@ namespace SAM.Analytical.Systems
             //       stated module has to be materialisable before a single object is created.
             //=============================================================================================
 
+            //SAM#123: checked first, so the conflict is what is reported rather than either half's own detail.
+            if (context.Settings.GuidanceSettings.Count != 0 && context.Settings.CoolingSettings.Count != 0)
+            {
+                context.Refuse("Both recirculation cooling modules and manufacturer-guidance cooling units were supplied; a unit is cooled one way or the other, never both.");
+                return Result(context, null);
+            }
+
             if (context.Settings.CoolingSettings.Count != 0)
             {
                 HashSet<Guid> guids_AirHandlingUnitSet = new HashSet<Guid>(guids_AirHandlingUnit);
@@ -333,6 +340,41 @@ namespace SAM.Analytical.Systems
                     if (refusal_Cooling != null)
                     {
                         context.Refuse(string.Format("Air handling unit '{0}' has a cooling module that {1}", dictionary_AirHandlingUnit[guid_AirHandlingUnit_Check].Name, refusal_Cooling));
+                        return Result(context, null);
+                    }
+                }
+            }
+
+            //=============================================================================================
+            //D2.3 - SAM#123 per-unit manufacturer-guidance cooling. The same all-or-nothing rule; never
+            //       combined with the PR5B recirculation branch.
+            //=============================================================================================
+
+            if (context.Settings.GuidanceSettings.Count != 0)
+            {
+                HashSet<Guid> guids_AirHandlingUnitSet = new HashSet<Guid>(guids_AirHandlingUnit);
+
+                foreach (Guid guid_GuidanceSettings in context.Settings.GuidanceSettings.Keys)
+                {
+                    if (!guids_AirHandlingUnitSet.Contains(guid_GuidanceSettings))
+                    {
+                        context.Refuse(string.Format("Manufacturer-guidance settings were supplied for air handling unit '{0}', which this call does not materialise.", dictionary_AirHandlingUnit.TryGetValue(guid_GuidanceSettings, out AirHandlingUnit airHandlingUnit_Unmaterialised) ? airHandlingUnit_Unmaterialised.Name : guid_GuidanceSettings.ToString()));
+                        return Result(context, null);
+                    }
+                }
+
+                foreach (Guid guid_AirHandlingUnit_Check in guids_AirHandlingUnit)
+                {
+                    if (!context.Settings.GuidanceSettings.TryGetValue(guid_AirHandlingUnit_Check, out MechanicalVentilationGuidanceSettings mechanicalVentilationGuidanceSettings_Check))
+                    {
+                        context.Refuse(string.Format("Air handling unit '{0}' has no manufacturer-guidance cooling unit while other units in this call do, so the graph would be only partly configured.", dictionary_AirHandlingUnit[guid_AirHandlingUnit_Check].Name));
+                        return Result(context, null);
+                    }
+
+                    string refusal_Guidance = mechanicalVentilationGuidanceSettings_Check == null ? "states no guidance settings." : mechanicalVentilationGuidanceSettings_Check.Refusal();
+                    if (refusal_Guidance != null)
+                    {
+                        context.Refuse(string.Format("Air handling unit '{0}' has a manufacturer-guidance cooling unit that {1}", dictionary_AirHandlingUnit[guid_AirHandlingUnit_Check].Name, refusal_Guidance));
                         return Result(context, null);
                     }
                 }
@@ -410,6 +452,15 @@ namespace SAM.Analytical.Systems
                 }
             }
 
+            //SAM#123: the same, for manufacturer-guidance units - nothing when none is stated.
+            if (context.Settings.GuidanceSettings.Count != 0)
+            {
+                foreach (Guid guid_AirHandlingUnit_Identity in guids_AirHandlingUnit)
+                {
+                    components_EnergyCentre.Add(context.Settings.GuidanceSettings[guid_AirHandlingUnit_Identity]?.IdentityComponent());
+                }
+            }
+
             context.Key_EnergyCentre = string.Join("|", components_EnergyCentre);
 
             Guid guid_EnergyCentre = context.Guid_Derived("SystemEnergyCentre", components_EnergyCentre.ToArray());
@@ -440,8 +491,9 @@ namespace SAM.Analytical.Systems
             {
                 context.Settings.UnitSettings.TryGetValue(guid_AirHandlingUnit, out MechanicalVentilationUnitSettings mechanicalVentilationUnitSettings);
                 context.Settings.CoolingSettings.TryGetValue(guid_AirHandlingUnit, out MechanicalVentilationCoolingSettings mechanicalVentilationCoolingSettings);
+                context.Settings.GuidanceSettings.TryGetValue(guid_AirHandlingUnit, out MechanicalVentilationGuidanceSettings mechanicalVentilationGuidanceSettings);
 
-                if (!MechanicalVentilationAirSystem(context, systemPlantRoom, airSystem_Template, dictionary_AirHandlingUnit[guid_AirHandlingUnit], dictionary_Member[guid_AirHandlingUnit], mechanicalVentilationUnitSettings, mechanicalVentilationCoolingSettings))
+                if (!MechanicalVentilationAirSystem(context, systemPlantRoom, airSystem_Template, dictionary_AirHandlingUnit[guid_AirHandlingUnit], dictionary_Member[guid_AirHandlingUnit], mechanicalVentilationUnitSettings, mechanicalVentilationCoolingSettings, mechanicalVentilationGuidanceSettings))
                 {
                     return Result(context, null);
                 }
@@ -547,7 +599,10 @@ namespace SAM.Analytical.Systems
             List<MechanicalVentilationRecirculationCooling> recirculationCoolings = new List<MechanicalVentilationRecirculationCooling>(context.RecirculationCoolings);
             recirculationCoolings.Sort((x, y) => x.Guid_AirHandlingUnit.CompareTo(y.Guid_AirHandlingUnit));
 
-            return new MechanicalVentilationMaterialisation(systemEnergyCentre, context.Refusals, context.Notes, context.Bindings, recirculationCoolings);
+            List<MechanicalVentilationGuidanceCooling> guidanceCoolings = new List<MechanicalVentilationGuidanceCooling>(context.GuidanceCoolings);
+            guidanceCoolings.Sort((x, y) => x.Guid_AirHandlingUnit.CompareTo(y.Guid_AirHandlingUnit));
+
+            return new MechanicalVentilationMaterialisation(systemEnergyCentre, context.Refusals, context.Notes, context.Bindings, recirculationCoolings, guidanceCoolings);
         }
 
         private static void Adjacency(Dictionary<Guid, List<(Guid, Guid)>> dictionary, Guid guid, (Guid, Guid) key)
