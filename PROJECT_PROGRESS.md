@@ -1,6 +1,46 @@
 # Project Progress
 
-## Branch
+## Current: Nuaire reply (24 Sep 2026) - exchanger then DX drop, 13 C floor
+
+**Status.** On `feature/parto-nuaire-reply-2026-09-24`. PRs OPEN (not merged yet; merge in this order): SAM-BIM/SAM#133 -> SAM-BIM/SAM_Systems#29 ->
+SAM-BIM/SAM_Tas#65 -> SAM-BIM/SAM_UI#107. The full cross-repo record (evidence, decisions, TAS probes, MG
+acceptance, residual uncertainties) is in SAM's `PROJECT_PROGRESS.md`, *Current* entry.
+
+**What Nuaire's reply (A. Nash, 24 Sep 2026) changed.**
+- The cooling supply is no longer `to - X`, which Nuaire called a simplified IES work-around valid at 32 C only.
+  It is now the exchanger (bypass, or recovery at eta(Q)), then the DX drop less the supply-motor heat, never
+  below 13 C. A coil does not heat.
+- The bypass is to >= 12, to < extract, extract >= 19 C. The MVHR decides it independently of the cooling-stat.
+- The cooling airflow is 60-120 l/s, with an 80 l/s default. A dwelling's own figure overrides it.
+- The brochure's 2.2 kW is a combined coolth-recovery + sensible figure, not a DX duty, and is no longer used.
+
+**This repo.**
+- `files/resources/.../VentilationUnitCatalogue.JSON`, Nuaire entry:
+  - `ExchangerThenCoil` cooling rule at 60/80/100/120 l/s: HX 87.96-81.36 %, DX drop 9.265-7.705 K, fan rise
+    0.3-1.1 K, 13 C floor;
+  - bypass extract 19 C;
+  - range 60-120 l/s, `DefaultElevatedAirFlow_Lps` 80;
+  - new provenance.
+- `Query.MechanicalVentilationGuidanceSettings`: the elevated airflow is the dwelling's figure, else the
+  stated default, else the midpoint. The catalogue entry stays unresolved.
+- `VentilationUnitCatalogueV3Tests` (+5).
+- Note: `dotnet test` of this test project copies the catalogue into `Documents\SAM\resources`.
+
+**Validation.** Tests: SAM 2252, SAM_Systems 256, TM59 944, WPF 1031, all passing. Framework MSBuild: 0 errors
+in all four repos.
+- Representative MG annual run (closeout): COMPLETE, bias 0.53 K, RMSE 1.413 K.
+  - The law and the exchanger state are exact in every full-flow hour.
+  - 0 hours cooled below 13 C by the coil.
+- The review fixes after that run (inclusive bypass minimums, extract axis beyond 45 C, floorless summary
+  text) were not rerun annually, by owner decision: they affect only exact-threshold hours (intake exactly
+  12.0 C, background hours) and extracts above 45 C (none in the MG).
+- This is manufacturer modelling guidance; Nuaire has not called it certified or approved.
+
+**Next step.** After merge, delete the branches and bump the SAM_Deploy pointers. Remaining manufacturer questions
+are listed in SAM's `PROJECT_PROGRESS.md`.
+
+
+## Previous: SAM#123 manufacturer-guidance catalogue branch record (superseded: merged 2026-09-24 via SAM_Systems#25; its 18 C / 70-90 l/s / intake-offset figures are replaced by the current entry)
 `feature/parto-nuaire-manufacturer-guidance`, branched from `sow/2026-Q3` at **`05ca0c1`** (PR5B, #24 merged).
 PR against `sow/2026-Q3`, **not merged**. Merge order for this work: SAM -> SAM_Systems -> (SAM_Tas -> SAM_UI,
 still to come).
@@ -105,7 +145,7 @@ extract with its terminal proportionality.
 
 B0 and B4 are untouched by everything above.
 
-## Current: SAM#123 manufacturer guidance - Iteration 3 mode "Selected product - manufacturer guidance" (2026-09-24)
+## Previous: SAM#123 manufacturer guidance - Iteration 3 mode "Selected product - manufacturer guidance" (2026-09-24)
 
 **Final integration review (2026-09-24, before merge; the merges followed).** One consolidated review of all four branches
 against `sow/2026-Q3`; no blockers, no code changed at review.

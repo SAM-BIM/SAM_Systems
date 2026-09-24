@@ -10,11 +10,12 @@ namespace SAM.Analytical.Systems
         /// <summary>
         /// SAM#123: a selected product's manufacturer-guidance settings for one dwelling unit - its catalogue
         /// operating strategy resolved to an elevated operating airflow, with the product's own published
-        /// table (which states the cooling capacity bound) and a traceable source identifier.
+        /// table and a traceable source identifier.
         /// <para>
-        /// <b>The elevated airflow is an operating airflow, not a capacity.</b> Where the strategy states none,
-        /// it is the midpoint of the range the manufacturer states for cooling operation - a declared default,
-        /// recorded as such - and it must lie within what the unit can move on both sides. The design airflow
+        /// <b>The elevated airflow is an operating airflow, not a capacity.</b> The dwelling's own figure where the
+        /// strategy states one; otherwise the default the manufacturer states; otherwise the midpoint of the range
+        /// the manufacturer states for cooling operation - a declared default, recorded as such. It must lie within
+        /// what the unit can move on both sides. The design airflow
         /// stays the dwelling's own; nothing here changes it.
         /// </para>
         /// </summary>
@@ -40,6 +41,11 @@ namespace SAM.Analytical.Systems
             }
 
             double elevated_Lps = strategy.ElevatedAirFlow_Lps;
+            if (double.IsNaN(elevated_Lps))
+            {
+                elevated_Lps = strategy.DefaultElevatedAirFlow_Lps;
+            }
+
             if (double.IsNaN(elevated_Lps))
             {
                 if (double.IsNaN(strategy.MinimumElevatedAirFlow_Lps) || double.IsNaN(strategy.MaximumElevatedAirFlow_Lps))
