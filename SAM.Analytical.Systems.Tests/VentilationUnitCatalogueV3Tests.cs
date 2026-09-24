@@ -155,23 +155,31 @@ namespace SAM.Analytical.Systems.Tests
             Assert.Equal(22.0, ventilationUnitOperatingStrategy.MinimumCoolingActivationTemperature_C, tolerance);
             Assert.Equal(25.0, ventilationUnitOperatingStrategy.MaximumCoolingActivationTemperature_C, tolerance);
             Assert.Equal(12.0, ventilationUnitOperatingStrategy.BypassMinimumIntakeTemperature_C, tolerance);
-            Assert.Equal(18.0, ventilationUnitOperatingStrategy.BypassMinimumExtractTemperature_C, tolerance);
-            Assert.Equal(70.0, ventilationUnitOperatingStrategy.MinimumElevatedAirFlow_Lps, tolerance);
-            Assert.Equal(90.0, ventilationUnitOperatingStrategy.MaximumElevatedAirFlow_Lps, tolerance);
+            Assert.Equal(19.0, ventilationUnitOperatingStrategy.BypassMinimumExtractTemperature_C, tolerance);
+            Assert.Equal(60.0, ventilationUnitOperatingStrategy.MinimumElevatedAirFlow_Lps, tolerance);
+            Assert.Equal(120.0, ventilationUnitOperatingStrategy.MaximumElevatedAirFlow_Lps, tolerance);
+            Assert.Equal(80.0, ventilationUnitOperatingStrategy.DefaultElevatedAirFlow_Lps, tolerance);
+            Assert.True(double.IsNaN(ventilationUnitOperatingStrategy.ElevatedAirFlow_Lps));
 
             Assert.Equal(SupplyTemperatureRuleType.OutdoorAir, ventilationUnitOperatingStrategy.SummerBypassSupplyTemperatureRule.SupplyTemperatureRuleType);
 
             Assert.Equal(SupplyTemperatureRuleType.LinearBlend, ventilationUnitOperatingStrategy.HeatCoolthRecoverySupplyTemperatureRule.SupplyTemperatureRuleType);
             Assert.Equal(0.8, ventilationUnitOperatingStrategy.HeatCoolthRecoverySupplyTemperatureRule.ExtractFraction, tolerance);
 
-            //Cooling: intake less the stated offset per cooling airflow, no floor (the 16 degC limit was
-            //withdrawn by the manufacturer), nothing stated outside the published airflows.
+            //Cooling (Nuaire, 24 Sep 2026): exchanger, then the DX drop less the supply-motor heat, never below
+            //13 degC, nothing stated outside the presentation's 60-120 l/s.
             SupplyTemperatureRule supplyTemperatureRule_Cooling = ventilationUnitOperatingStrategy.CoolingSupplyTemperatureRule;
-            Assert.Equal(SupplyTemperatureRuleType.IntakeOffset, supplyTemperatureRule_Cooling.SupplyTemperatureRuleType);
-            Assert.Equal(new[] { 70.0, 80.0, 90.0, 100.0, 110.0 }, supplyTemperatureRule_Cooling.AirFlowRates_Lps);
-            Assert.Equal(new[] { 15.0, 14.5, 14.0, 13.5, 13.0 }, supplyTemperatureRule_Cooling.IntakeOffsets_K);
-            Assert.True(double.IsNaN(supplyTemperatureRule_Cooling.MinimumSupplyTemperature_C));
+            Assert.Equal(SupplyTemperatureRuleType.ExchangerThenCoil, supplyTemperatureRule_Cooling.SupplyTemperatureRuleType);
+            Assert.Equal(new[] { 60.0, 80.0, 100.0, 120.0 }, supplyTemperatureRule_Cooling.AirFlowRates_Lps);
+            Assert.Equal(new[] { 0.8796, 0.8576, 0.8356, 0.8136 }, supplyTemperatureRule_Cooling.ExtractFractions);
+            Assert.Equal(new[] { 9.265, 8.745, 8.225, 7.705 }, supplyTemperatureRule_Cooling.CoilTemperatureDrops_K);
+            Assert.Equal(new[] { 0.3, 0.5, 0.8, 1.1 }, supplyTemperatureRule_Cooling.FanTemperatureRises_K);
+            Assert.Equal(13.0, supplyTemperatureRule_Cooling.MinimumSupplyTemperature_C, tolerance);
             Assert.Equal(PerformanceDomainPolicy.Refuse, supplyTemperatureRule_Cooling.PerformanceDomainPolicy);
+
+            //At 90 l/s the figures are the manufacturer's own IES switching formula (0.8466, 7.84 K).
+            Assert.Equal(0.8466, supplyTemperatureRule_Cooling.ExchangerExtractFraction(90.0), 1e-9);
+            Assert.Equal(7.84, supplyTemperatureRule_Cooling.CoilNetTemperatureDrop_K(90.0), 0.006);
 
             //Cooling is switched by the room cooling-stat; bypass and recovery stay on the extract.
             Assert.Equal(CoolingActivationSignal.RoomTemperature, ventilationUnitOperatingStrategy.CoolingActivationSignal);
@@ -196,9 +204,10 @@ namespace SAM.Analytical.Systems.Tests
             //The document's own restriction is why nothing of it but these figures is in the repository.
             Assert.Contains("not committed", source, StringComparison.OrdinalIgnoreCase);
 
-            //The cooling rule cites the instruction that withdrew the 16 degC floor, and says it is provisional.
+            //The cooling rule cites the reply that superseded the 13 Aug 2025 offset rule, and claims no approval.
             Assert.Contains("13 Aug 2025", source, StringComparison.Ordinal);
-            Assert.Contains("PROVISIONAL", source, StringComparison.Ordinal);
+            Assert.Contains("24 SEP 2026", source, StringComparison.Ordinal);
+            Assert.Contains("has not described it as certified or approved", source, StringComparison.Ordinal);
         }
 
         /// <summary>
@@ -245,24 +254,32 @@ namespace SAM.Analytical.Systems.Tests
 
             Assert.Null(ventilationUnitOperatingStrategy.Refusal());
 
-            //Bypass: intake air (room below the stat, extract above intake and 18 degC).
+            //Bypass: intake air (room below the stat, extract above intake and 19 degC).
             Assert.Equal(15.0, ventilationUnitOperatingStrategy.SupplyTemperature(15.0, 21.0, 21.0, 30.0, ventilationUnitTemplate.PerformanceTable, out VentilationUnitOperatingMode ventilationUnitOperatingMode_Bypass, out double airFlow_Bypass), tolerance);
             Assert.Equal(VentilationUnitOperatingMode.SummerBypass, ventilationUnitOperatingMode_Bypass);
             Assert.Equal(30.0, airFlow_Bypass, tolerance);
 
-            //Recovery: the stated blend - a warm extract with a room below the stat does not cool.
+            //Not above 19 degC extract: recovery (it was bypass under the earlier 18 degC threshold).
+            Assert.Equal((0.8 * 18.5) + (0.2 * 15.0), ventilationUnitOperatingStrategy.SupplyTemperature(15.0, 18.5, 18.5, 30.0, ventilationUnitTemplate.PerformanceTable, out VentilationUnitOperatingMode ventilationUnitOperatingMode_Below19, out _), tolerance);
+            Assert.Equal(VentilationUnitOperatingMode.HeatCoolthRecovery, ventilationUnitOperatingMode_Below19);
+
+            //Recovery: the stated blend - cold intake, room below the stat.
             Assert.Equal((0.8 * 25.0) + (0.2 * 5.0), ventilationUnitOperatingStrategy.SupplyTemperature(5.0, 25.0, 20.0, 30.0, ventilationUnitTemplate.PerformanceTable, out VentilationUnitOperatingMode ventilationUnitOperatingMode_Recovery, out _), tolerance);
             Assert.Equal(VentilationUnitOperatingMode.HeatCoolthRecovery, ventilationUnitOperatingMode_Recovery);
 
-            //Cooling: room above the stat -> intake less X at the elevated airflow (90 l/s -> 14 K), no floor.
+            //Cooling: room above the stat -> coolth recovery at 90 l/s, then the 7.835 K net coil drop.
             double supplyTemperature_C = ventilationUnitOperatingStrategy.SupplyTemperature(32.0, 24.0, 23.0, 30.0, ventilationUnitTemplate.PerformanceTable, out VentilationUnitOperatingMode ventilationUnitOperatingMode_Cooling, out double airFlow_Cooling);
 
             Assert.Equal(VentilationUnitOperatingMode.Cooling, ventilationUnitOperatingMode_Cooling);
             Assert.Equal(90.0, airFlow_Cooling, tolerance);
-            Assert.Equal(18.0, supplyTemperature_C, tolerance);
+            Assert.Equal((0.8466 * 24.0) + (0.1534 * 32.0) - 7.835, supplyTemperature_C, tolerance);
 
-            //The withdrawn floor no longer bites: 29 degC at 70 l/s is 14 degC, below the old 16.
-            Assert.Equal(14.0, ventilationUnitOperatingStrategy.WithElevatedAirFlow(70.0).SupplyTemperature(29.0, 23.0, 23.0, 30.0, ventilationUnitTemplate.PerformanceTable, out _, out _), tolerance);
+            //Cooling in bypass, and the 13 degC limit once bypassed intake less the drop would fall below it.
+            Assert.Equal(22.0 - 7.835, ventilationUnitOperatingStrategy.SupplyTemperature(22.0, 23.0, 23.0, 30.0, ventilationUnitTemplate.PerformanceTable, out _, out _), tolerance);
+            Assert.Equal(13.0, ventilationUnitOperatingStrategy.SupplyTemperature(19.0, 23.0, 23.0, 30.0, ventilationUnitTemplate.PerformanceTable, out _, out _), tolerance);
+
+            //Outside the stated 60-120 l/s nothing is stated.
+            Assert.NotNull(ventilationUnitTemplate.OperatingStrategy.WithElevatedAirFlow(50.0).Refusal());
 
             //A room-stat entry is never evaluated on the extract alone.
             Assert.True(double.IsNaN(ventilationUnitOperatingStrategy.SupplyTemperature(32.0, 24.0, 30.0, ventilationUnitTemplate.PerformanceTable, out VentilationUnitOperatingMode ventilationUnitOperatingMode_NoRoom, out _)));
@@ -271,8 +288,8 @@ namespace SAM.Analytical.Systems.Tests
 
         /// <summary>
         /// The shipped entry resolves to manufacturer-guidance settings for a dwelling: the elevated operating
-        /// airflow is the midpoint of the stated cooling range, within the unit's capacity, the cooling rule
-        /// states its offset there, and the product's table carries the capacity bound the grounding reads.
+        /// airflow is the manufacturer's stated default (80 l/s), within the unit's capacity, the cooling rule
+        /// states its figures there, and the product's table carries the capacity bound the grounding reads.
         /// </summary>
         [Fact]
         public void TheShippedHybridEntry_ResolvesToGuidanceSettings()
@@ -287,13 +304,39 @@ namespace SAM.Analytical.Systems.Tests
 
             VentilationUnitOperatingStrategy strategy = mechanicalVentilationGuidanceSettings.OperatingStrategy;
             Assert.Equal(80.0, strategy.ElevatedAirFlow_Lps, tolerance);
-            Assert.Equal(14.5, strategy.CoolingSupplyTemperatureRule.IntakeOffset_K(strategy.ElevatedAirFlow_Lps), tolerance);
+            Assert.Equal(0.8576, strategy.CoolingSupplyTemperatureRule.ExchangerExtractFraction(strategy.ElevatedAirFlow_Lps), 1e-9);
+            Assert.Equal(8.245, strategy.CoolingSupplyTemperatureRule.CoilNetTemperatureDrop_K(strategy.ElevatedAirFlow_Lps), 1e-9);
             Assert.Null(strategy.CoolingSupplyTemperatureRule.AirFlowDomainCondition(strategy.ElevatedAirFlow_Lps));
             Assert.NotNull(mechanicalVentilationGuidanceSettings.SupplyAirTemperatureTable.Output(VentilationUnitPerformanceOutput.Name_CombinedCoolingCapacity));
             Assert.Contains("MRXBOX", mechanicalVentilationGuidanceSettings.SourceIdentifier, StringComparison.Ordinal);
 
             //The catalogue entry itself stays unresolved - a dwelling's choice is never written back into it.
             Assert.True(double.IsNaN(ventilationUnitTemplate.OperatingStrategy.ElevatedAirFlow_Lps));
+        }
+
+        /// <summary>
+        /// A dwelling's own cooling airflow (commissioned data) takes precedence over the stated default, within
+        /// the stated 60-120 l/s; outside it the settings refuse rather than clamp.
+        /// </summary>
+        [Theory]
+        [InlineData(60.0, true)]
+        [InlineData(100.0, true)]
+        [InlineData(120.0, true)]
+        [InlineData(59.0, false)]
+        [InlineData(125.0, false)]
+        public void ADwellingsOwnCoolingAirflow_OverridesTheDefault_WithinTheStatedRange(double elevated_Lps, bool accepted)
+        {
+            VentilationUnitTemplate ventilationUnitTemplate = ShippedHybridTemplate();
+            ventilationUnitTemplate.OperatingStrategy = ventilationUnitTemplate.OperatingStrategy.WithElevatedAirFlow(elevated_Lps);
+
+            MechanicalVentilationGuidanceSettings mechanicalVentilationGuidanceSettings = ventilationUnitTemplate.MechanicalVentilationGuidanceSettings(out string refusal);
+
+            Assert.Equal(accepted, mechanicalVentilationGuidanceSettings != null);
+            Assert.Equal(accepted, refusal == null);
+            if (accepted)
+            {
+                Assert.Equal(elevated_Lps, mechanicalVentilationGuidanceSettings.OperatingStrategy.ElevatedAirFlow_Lps, tolerance);
+            }
         }
 
         // =================================================================================================
