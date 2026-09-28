@@ -51,7 +51,7 @@ namespace SAM.Analytical.Grasshopper.Systems
     {
         public override Guid ComponentGuid => new Guid("cc593874-611a-4378-92a0-85d88ed82b9a");
 
-        protected override System.Drawing.Bitmap Icon => Resources.SAM3_0;
+        protected override System.Drawing.Bitmap Icon => Resources.SAM_GH_PlantRoom;
 
         public GooSystemPlantRoomParam()
             : base(typeof(SystemPlantRoom).Name, typeof(SystemPlantRoom).Name, typeof(SystemPlantRoom).FullName.Replace(".", " "), "Params", "SAM")

@@ -38,7 +38,7 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// <summary>
         /// Provides an icon for the component.
         /// </summary>
-        protected override System.Drawing.Bitmap Icon => Resources.SAM_Small;
+        protected override System.Drawing.Bitmap Icon => Resources.SAM_GH_FanModify;
 
         /// <summary>
         /// Registers all the input parameters for this component.
