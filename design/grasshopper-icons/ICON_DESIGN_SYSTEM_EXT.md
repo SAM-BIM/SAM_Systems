@@ -21,7 +21,7 @@ vendored verbatim from SAM-BIM/SAM#166 @ `cf4d924a`) to the SAM-BIM plugin repos
 |---|---|---|
 | `mollierChart` | psychrometric chart axes + saturation curve, green area | Mollier/psychrometric chart, diagram, generic Mollier object |
 | `mollierPoint` | chart (thin) + green state point | MollierPoint |
-| `mollierProcess` | chart (thin) + two green states joined | MollierProcess (generic, undefined, by two points), MollierGroup (plural param) |
+| `mollierProcess` | chart (thin) + two green states joined | MollierProcess (generic, undefined, by two points); MollierGroup uses SAM `group` |
 | `processHeating` / `processCooling` | chart + bold green arrow → / ← (mirrored pair) | heating / cooling processes |
 | `processHumidification` | chart + arrow ↑ | isothermal and steam humidification |
 | `processAdiabatic` | chart + arrow ↖ | adiabatic humidification |
