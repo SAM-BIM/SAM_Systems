@@ -41,7 +41,7 @@ namespace SAM.Analytical.Grasshopper.Systems
     {
         public override Guid ComponentGuid => new Guid("3f01a7cf-8268-496a-8247-602d1b4f109b");
 
-        protected override System.Drawing.Bitmap Icon => Resources.SAM3_0;
+        protected override System.Drawing.Bitmap Icon => Resources.SAM_GH_EnergyCentre;
 
         public GooSystemEnergyCentreParam()
             : base(typeof(SystemEnergyCentre).Name, typeof(SystemEnergyCentre).Name, typeof(SystemEnergyCentre).FullName.Replace(".", " "), "Params", "SAM")

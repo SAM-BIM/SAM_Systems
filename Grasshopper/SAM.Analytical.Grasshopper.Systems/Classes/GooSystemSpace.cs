@@ -51,7 +51,7 @@ namespace SAM.Analytical.Grasshopper.Systems
     {
         public override Guid ComponentGuid => new Guid("1ea2ed4a-1fd0-44ff-a4cb-a910aefe2fc9");
 
-        protected override System.Drawing.Bitmap Icon => Resources.SAM3_0;
+        protected override System.Drawing.Bitmap Icon => Resources.SAM_GH_Space;
 
         public override GH_Exposure Exposure => GH_Exposure.hidden;
 

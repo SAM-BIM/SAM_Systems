@@ -49,7 +49,7 @@ namespace SAM.Core.Grasshopper.Systems
     {
         public override Guid ComponentGuid => new Guid("ab9deb98-f591-469b-8b47-aa69df35000f");
 
-        protected override System.Drawing.Bitmap Icon => Resources.SAM3_0;
+        protected override System.Drawing.Bitmap Icon => Resources.SAM_GH_Result;
 
         public override GH_Exposure Exposure => GH_Exposure.hidden;
 
