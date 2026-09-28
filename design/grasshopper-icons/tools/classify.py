@@ -39,7 +39,7 @@ EXT_OBJECTS = [
     ("CoolingProcess", "processCooling", None), ("MixingProcess", "processMixing", None),
     ("HeatRecoveryProcess", "processHeatRecovery", None), ("FanProcess", "processFan", None), ("RoomProcess", "processRoom", None),
     ("UndefinedProcess", "mollierProcess", None), ("MollierProcess", "mollierProcess", None), ("MollierPoint", "mollierPoint", None),
-    ("MollierGroup", "mollierProcess", None), ("MollierChart", "mollierChart", None), ("Diagram", "mollierChart", None),
+    ("MollierGroup", "group", None), ("MollierChart", "mollierChart", None), ("Diagram", "mollierChart", None),
     ("Psychrometric", "mollierChart", None), ("Mollier", "mollierChart", None),
     ("CellComplex", "cellComplex", None), ("Topology", "cellComplex", None),
     ("Algorithm", "algorithm", None), ("GenOpt", "algorithm", None), ("Solver", "algorithm", None), ("Objective", "objective", None),
@@ -52,7 +52,7 @@ EXT_OBJECTS = [
     ("SunAnalysis", "solar", None), ("SolarSimulation", "solar", None),
 ]
 EXT_PARAM_OBJECTS = {
-    "MollierPoint": "mollierPoint", "MollierProcess": "mollierProcess", "MollierGroup": ("mollierProcess", None, True),
+    "MollierPoint": "mollierPoint", "MollierProcess": "mollierProcess", "MollierGroup": "group",
     "MollierObject": "mollierChart", "MollierChartObject": "mollierChart", "CellComplex": "cellComplex", "ResolvedCellComplex": "cellComplex",
     "Algorithm": "algorithm", "Objective": "objective", "Script": "script", "BandValues": "sound",
     "SystemEnergyCentre": "energyCentre", "SystemPlantRoom": "plantRoom",
