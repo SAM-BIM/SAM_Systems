@@ -54,12 +54,14 @@ def update_resx(path, names, as_bytes):
 def update_designer(path, names, as_bytes):
     text, bom, nl = read(path)
     text = re.sub(r"        \n        /// <summary>\n        ///   Looks up a localized resource of type [^\n]+\n        /// </summary>\n"
-                  r"        internal static [^\n]+ " + PREFIX + r"\w+ \{\n(?:            [^\n]*\n)+        \}\n", "", text)
+                  r"        (?:internal|public) static [^\n]+ " + PREFIX + r"\w+ \{\n(?:            [^\n]*\n)+        \}\n", "", text)
     typ = "byte[]" if as_bytes else "System.Drawing.Bitmap"
+    # match the generator in use (ResXFileCodeGenerator = internal, PublicResXFileCodeGenerator = public)
+    vis = "public" if re.search(r"\n        public static [\w.\[\]]+ \w+\s*\{\s*\n\s*get", text) else "internal"
     kind = "System.Byte[]" if as_bytes else "System.Drawing.Bitmap"
     props = "".join(
         f"        \n        /// <summary>\n        ///   Looks up a localized resource of type {kind}.\n        /// </summary>\n"
-        f"        internal static {typ} {n} {{\n            get {{\n"
+        f"        {vis} static {typ} {n} {{\n            get {{\n"
         f"                object obj = ResourceManager.GetObject(\"{n}\", resourceCulture);\n"
         f"                return (({typ})(obj));\n            }}\n        }}\n" for n in sorted(names))
     idx = text.rstrip().rfind("}")  # namespace close
@@ -71,7 +73,7 @@ def update_designer(path, names, as_bytes):
 def resource_is_bytes(designer, name):
     """Type of an existing resource in Resources.Designer.cs (True = byte[], False = Bitmap)."""
     text = read(designer)[0]
-    m = re.search(r"internal static ([\w.\[\]]+) " + re.escape(name) + r"\s*\{", text)
+    m = re.search(r"(?:internal|public) static ([\w.\[\]]+) " + re.escape(name) + r"\s*\{", text)
     assert m, (designer, name)
     return m.group(1) == "byte[]"
 

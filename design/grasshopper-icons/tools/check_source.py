@@ -21,7 +21,7 @@ VENDORED = {  # file -> SHA-256 (LF line endings) of SAM/design/grasshopper-icon
     "render.py": "8a87f66c45e0bb3e04cc613f2b0f28a8cb8df951a7daad95bdec8e3851060a3f",
     "sam_classify.py": "317064816c964e2268e9406aee9ca5f7d82c2bdb34da9c3225a344ca2464b864",  # SAM classify.py
 }
-TOKEN = re.compile(r"\b\w+\.(SAM_GH_\w+|\w+)")
+TOKEN = re.compile(r"\b(?:\w+\.)+\w+")  # any dotted chain, e.g. Properties.Resources.SAM_Small3
 KEEP_RE = re.compile(r'ComponentGuid|base\(\s*"|GH_Exposure|Category|NickName|new Guid\(|new\("')
 
 
@@ -59,8 +59,14 @@ def main(base):
         if len(minus) != len(plus):
             bad.append((f, "added/removed lines"))
             continue
+        now = open(os.path.join(REPO, f), encoding="utf-8-sig").read()
+        getters = [m.end() for m in re.finditer(r"Bitmap\s+Icon\b", now)]
+
+        def in_icon_getter(line):  # the line sits inside an `Icon` getter (single- or multi-line form)
+            i = now.find(line.strip())
+            return i >= 0 and any(0 <= i - g <= 300 for g in getters)
         for a, b in zip(minus, plus):
-            if "Icon" not in a or TOKEN.sub("X", a) != TOKEN.sub("X", b) or "SAM_GH_" not in b or KEEP_RE.search(a):
+            if ("Icon" not in a and not in_icon_getter(b)) or TOKEN.sub("X", a) != TOKEN.sub("X", b) or "SAM_GH_" not in b or KEEP_RE.search(a):
                 bad.append((f, a.strip(), b.strip()))
             else:
                 swaps += 1
