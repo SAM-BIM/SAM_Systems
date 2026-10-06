@@ -1,4 +1,7 @@
-﻿using Grasshopper.Kernel;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using Rhino;
 using Rhino.DocObjects;
@@ -124,7 +127,7 @@ namespace SAM.Analytical.Grasshopper.Systems
     {
         public override Guid ComponentGuid => new Guid("3243e174-d434-45bf-bc75-0854c3bb7735");
 
-        protected override System.Drawing.Bitmap Icon => Resources.SAM_Small;
+        protected override System.Drawing.Bitmap Icon => Resources.SAM_GH_SystemPlural;
 
         public bool Hidden { get; set; }
 
