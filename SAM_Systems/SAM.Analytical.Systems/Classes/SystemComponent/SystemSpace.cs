@@ -59,8 +59,11 @@ namespace SAM.Analytical.Systems
                 DisplacementVentilation = systemSpace.DisplacementVentilation;
                 ModelInterzoneFlow = systemSpace.ModelInterzoneFlow;
                 ModelVentilationFlow = systemSpace.ModelVentilationFlow;
-                FlowRate = systemSpace.FlowRate;
-                FreshAir = systemSpace.FreshAir;
+                //Cloned, not shared. Every sibling component clones its flow values, and
+                //Modify.UpdateSpaceAirflows writes SizedFlowValue.Value in place - so a shared reference is
+                //a live route from a copy back into whatever it was copied from, including a template.
+                FlowRate = systemSpace.FlowRate?.Clone();
+                FreshAir = systemSpace.FreshAir?.Clone();
                 MinimumDesignFlowFraction = systemSpace.MinimumDesignFlowFraction;
             }
         }
@@ -79,8 +82,11 @@ namespace SAM.Analytical.Systems
                 DisplacementVentilation = systemSpace.DisplacementVentilation;
                 ModelInterzoneFlow = systemSpace.ModelInterzoneFlow;
                 ModelVentilationFlow = systemSpace.ModelVentilationFlow;
-                FlowRate = systemSpace.FlowRate;
-                FreshAir = systemSpace.FreshAir;
+                //Cloned, not shared. Every sibling component clones its flow values, and
+                //Modify.UpdateSpaceAirflows writes SizedFlowValue.Value in place - so a shared reference is
+                //a live route from a copy back into whatever it was copied from, including a template.
+                FlowRate = systemSpace.FlowRate?.Clone();
+                FreshAir = systemSpace.FreshAir?.Clone();
                 MinimumDesignFlowFraction = systemSpace.MinimumDesignFlowFraction;
             }
         }

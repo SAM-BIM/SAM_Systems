@@ -1,4 +1,7 @@
-﻿using Grasshopper.Kernel;
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020-2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using Grasshopper.Kernel;
 using SAM.Analytical.Grasshopper.Systems.Properties;
 using SAM.Analytical.Systems;
 using SAM.Core.Grasshopper;
@@ -32,7 +35,11 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// </summary>
         public SAMSystemsMergeEnergyCentreByECs()
           : base("SAMSystems.MergeEnergyCentreByECs", "SAMSystems.MergeEnergyCentreByECs",
-              "Merges MergeEnergyCentreByECs",
+              "Merges several SystemEnergyCentres into one.\n" +
+              "\n" +
+              "Combines the plantrooms (and their air systems) from the supplied energy centres into a single\n" +
+              "SystemEnergyCentre. Optionally restrict the merge to specific air systems or plantrooms, and\n" +
+              "rename groups to keep them unique across the merged result.",
               "SAM", "Systems")
         {
         }
@@ -45,13 +52,13 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "_systemEnergyCentres", NickName = "_systemEnergyCentres", Description = "SAM SystemEnergyCentres", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new Core.Grasshopper.Systems.GooSystemParam() { Name = "airSystems_", NickName = "airSystems_", Description = "SAM AirSystems", Access = GH_ParamAccess.list, Optional = true }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new GooSystemPlantRoomParam() { Name = "systemPlantRooms_", NickName = "systemPlantRooms_", Description = "SAM SystemPlantRooms", Access = GH_ParamAccess.list, Optional = true }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "_systemEnergyCentres", NickName = "_systemEnergyCentres", Description = "The SAM SystemEnergyCentres to merge into one.", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new Core.Grasshopper.Systems.GooSystemParam() { Name = "airSystems_", NickName = "airSystems_", Description = "Optional subset of air systems to include in the merge. Leave empty to include all air systems from the supplied energy centres.", Access = GH_ParamAccess.list, Optional = true }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemPlantRoomParam() { Name = "systemPlantRooms_", NickName = "systemPlantRooms_", Description = "Optional subset of plantrooms to include in the merge. Leave empty to include all plantrooms from the supplied energy centres.", Access = GH_ParamAccess.list, Optional = true }, ParamVisibility.Binding));
 
                 global::Grasshopper.Kernel.Parameters.Param_Boolean @boolean = null;
 
-                @boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_renameGroups_", NickName = "_renameGroups_", Description = "Rename groups.", Access = GH_ParamAccess.item };
+                @boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_renameGroups_", NickName = "_renameGroups_", Description = "When true, system groups are renamed so they stay unique after merging (avoids name clashes between energy centres).\n\nDefaults to true.", Access = GH_ParamAccess.item };
                 @boolean.SetPersistentData(true);
                 result.Add(new GH_SAMParam(@boolean, ParamVisibility.Binding));
 
@@ -67,8 +74,8 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "systemEnergyCentre", NickName = "systemEnergyCentre", Description = "SAM SystemEnergyCentre", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new GooSystemGroupParam() { Name = "airSystemGroups", NickName = "airSystemGroups", Description = "SAM AirSystemGroups", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "systemEnergyCentre", NickName = "systemEnergyCentre", Description = "The single merged SystemEnergyCentre.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemGroupParam() { Name = "airSystemGroups", NickName = "airSystemGroups", Description = "The air system groups in the merged energy centre (one per merged air system).", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
                 return result.ToArray();
             }
         }

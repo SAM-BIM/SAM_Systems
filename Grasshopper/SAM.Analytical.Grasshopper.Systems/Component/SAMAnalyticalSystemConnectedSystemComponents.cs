@@ -35,7 +35,11 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// </summary>
         public SAMAnalyticalSystemConnectedSystemComponents()
           : base("SAMAnalytical.ConnectedSystemComponents", "SAMAnalytical.ConnectedSystemComponents",
-              "Gets Connected System Components",
+              "Gets the components directly connected to a given component along a system.\n" +
+              "\n" +
+              "Starting from one component, this returns its immediate neighbours on the chosen system (e.g. an\n" +
+              "AirSystem) - those one step upstream (In), one step downstream (Out), or both when no direction\n" +
+              "is given. Use it to walk the connectivity of a plantroom one hop at a time.",
               "SAM", "Systems")
         {
         }
@@ -48,10 +52,10 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = [];
-                result.Add(new GH_SAMParam(new GooSystemPlantRoomParam() { Name = "_systemPlantRoom", NickName = "_systemPlantRoom", Description = "SystemPlantRoom", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new Core.Grasshopper.Systems.GooSystemParam() { Name = "_system", NickName = "_system", Description = "System", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new GooSystemComponentParam() { Name = "_systemComponent", NickName = "_systemComponent", Description = "System Component", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "direction_", NickName = "direction_", Description = "Flow Direction", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemPlantRoomParam() { Name = "_systemPlantRoom", NickName = "_systemPlantRoom", Description = "The SAM SystemPlantRoom whose connectivity is queried.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new Core.Grasshopper.Systems.GooSystemParam() { Name = "_system", NickName = "_system", Description = "The system whose connections to follow (e.g. an AirSystem or LiquidSystem). A component can belong to several systems; this selects which network to traverse.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemComponentParam() { Name = "_systemComponent", NickName = "_systemComponent", Description = "The component to find the neighbours of.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "direction_", NickName = "direction_", Description = "Flow direction to search: \"In\" (upstream) or \"Out\" (downstream).\n\nOptional: leave empty to return neighbours in both directions.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Binding));
 
                 return [.. result];
             }
@@ -65,7 +69,7 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooSystemComponentParam() { Name = "systemComponents", NickName = "systemComponents", Description = "System Components", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemComponentParam() { Name = "systemComponents", NickName = "systemComponents", Description = "The components directly connected to the input component along the chosen system and direction(s).", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
                 return [.. result];
             }
         }

@@ -36,7 +36,12 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// </summary>
         public SAMAnalyticalSystemModifyAirSystem()
           : base("SAMAnalytical.ModifyAirSystem", "SAMAnalytical.ModifyAirSystem",
-              "Modify VentilationSystem",
+              "Assigns spaces to an air system within a SystemEnergyCentre and returns the updated model.\n" +
+              "\n" +
+              "Use it to set which spaces a given air system serves. Optionally remove those spaces from any\n" +
+              "other air system they were on, and clean up air systems left with no spaces.\n" +
+              "\n" +
+              "If systemEnergyCentre_ is not supplied, the energy centre stored on the analytical model is used.",
               "SAM", "Systems")
         {
         }
@@ -49,22 +54,22 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooAnalyticalModelParam() { Name = "_analyticalModel", NickName = "_analyticalModel", Description = "SAM AnalyticalModel", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new GooSpaceParam() { Name = "_spaces", NickName = "_spaces", Description = "SAM Analytical Spaces", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "systemEnergyCentre_", NickName = "systemEnergyCentre_", Description = "SAM SystemEnergyCentre", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
-                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "_airSystem", NickName = "_airSystem", Description = "SAM AirSystem", Access = GH_ParamAccess.item, Optional = false }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooAnalyticalModelParam() { Name = "_analyticalModel", NickName = "_analyticalModel", Description = "The SAM AnalyticalModel to update. A copy is returned with the modified energy centre.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSpaceParam() { Name = "_spaces", NickName = "_spaces", Description = "The SAM analytical spaces to assign to the air system.", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemEnergyCentreParam() { Name = "systemEnergyCentre_", NickName = "systemEnergyCentre_", Description = "The SystemEnergyCentre to modify.\n\nOptional: if omitted, the energy centre stored on the analytical model is used.", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "_airSystem", NickName = "_airSystem", Description = "The air system that the spaces should be assigned to.", Access = GH_ParamAccess.item, Optional = false }, ParamVisibility.Binding));
 
                 global::Grasshopper.Kernel.Parameters.Param_Boolean param_Boolean;
 
-                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_cleanUnusedSystems_", NickName = "_cleanUnusedSystems_", Description = "Clean Unused Systems", Access = GH_ParamAccess.item, Optional = true };
+                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_cleanUnusedSystems_", NickName = "_cleanUnusedSystems_", Description = "When true, removes any air systems left serving no spaces after the reassignment.\n\nOptional: defaults to false.", Access = GH_ParamAccess.item, Optional = true };
                 param_Boolean.SetPersistentData(false);
                 result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
 
-                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_removeSpacesFormExistingAirSystem_", NickName = "_removeSpacesFormExistingAirSystem_", Description = "Remove Spaces Form Existing AirSystem", Access = GH_ParamAccess.item, Optional = true };
+                param_Boolean = new global::Grasshopper.Kernel.Parameters.Param_Boolean() { Name = "_removeSpacesFormExistingAirSystem_", NickName = "_removeSpacesFormExistingAirSystem_", Description = "When true, the spaces are first removed from any other air system they are currently assigned to, so each space serves only one air system.\n\nOptional: defaults to false.", Access = GH_ParamAccess.item, Optional = true };
                 param_Boolean.SetPersistentData(false);
                 result.Add(new GH_SAMParam(param_Boolean, ParamVisibility.Binding));
 
-                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_systemEnergyCentresDirectory", NickName = "_systemEnergyCentresDirectory", Description = "SAM SystemEnergyCentres Directory", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
+                result.Add(new GH_SAMParam(new global::Grasshopper.Kernel.Parameters.Param_String() { Name = "_systemEnergyCentresDirectory", NickName = "_systemEnergyCentresDirectory", Description = "Folder of SystemEnergyCentre JSON templates to draw system definitions from.\n\nOptional: defaults to the local SAM library (%AppData%\\SAM\\resources\\Analytical\\Systems\\SystemEnergyCentre).", Access = GH_ParamAccess.item, Optional = true }, ParamVisibility.Voluntary));
 
                 return result.ToArray();
             }
@@ -78,8 +83,8 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = new List<GH_SAMParam>();
-                result.Add(new GH_SAMParam(new GooAnalyticalModelParam { Name = "analyticalModel", NickName = "analyticalModel", Description = "SAM AnalyticalModel", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new GooSystemObjectParam { Name = "airSystem", NickName = "airSystem", Description = "SAM AirSystem", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooAnalyticalModelParam { Name = "analyticalModel", NickName = "analyticalModel", Description = "The SAM AnalyticalModel with the updated energy centre.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam { Name = "airSystem", NickName = "airSystem", Description = "The air system the spaces were assigned to.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
                 return result.ToArray();
             }
         }

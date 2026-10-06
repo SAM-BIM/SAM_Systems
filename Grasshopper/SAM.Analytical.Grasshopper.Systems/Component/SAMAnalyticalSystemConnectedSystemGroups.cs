@@ -34,7 +34,10 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// </summary>
         public SAMAnalyticalSystemConnectedSystemGroups()
           : base("SAMAnalytical.ConnectedSystemGroups", "SAMAnalytical.ConnectedSystemGroups",
-              "Gets Connected System Components",
+              "Gets the system groups that a given component belongs to within a plantroom.\n" +
+              "\n" +
+              "System groups are logical groupings of components (e.g. an air-handling unit). This returns every\n" +
+              "group related to the supplied component.",
               "SAM", "Systems")
         {
         }
@@ -47,8 +50,8 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = [];
-                result.Add(new GH_SAMParam(new GooSystemPlantRoomParam() { Name = "_systemPlantRoom", NickName = "_systemPlantRoom", Description = "SystemPlantRoom", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
-                result.Add(new GH_SAMParam(new GooSystemComponentParam() { Name = "_systemComponent", NickName = "_systemComponent", Description = "System Component", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemPlantRoomParam() { Name = "_systemPlantRoom", NickName = "_systemPlantRoom", Description = "The SAM SystemPlantRoom that holds the component and its groups.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemComponentParam() { Name = "_systemComponent", NickName = "_systemComponent", Description = "The component whose owning system groups should be returned.", Access = GH_ParamAccess.item }, ParamVisibility.Binding));
 
                 return [.. result];
             }
@@ -62,7 +65,7 @@ namespace SAM.Analytical.Grasshopper.Systems
             get
             {
                 List<GH_SAMParam> result = [];
-                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "systemGroups", NickName = "systemGroups", Description = "System Groups", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
+                result.Add(new GH_SAMParam(new GooSystemObjectParam() { Name = "systemGroups", NickName = "systemGroups", Description = "The system groups the component belongs to.", Access = GH_ParamAccess.list }, ParamVisibility.Binding));
                 return [.. result];
             }
         }

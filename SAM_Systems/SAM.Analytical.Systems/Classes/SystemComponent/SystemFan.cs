@@ -9,10 +9,25 @@ namespace SAM.Analytical.Systems
 {
     public class SystemFan : SystemComponent, IAirSystemComponent
     {
+        /// <summary>
+        /// Fan total (overall) efficiency [0-1].
+        /// </summary>
         public ModifiableValue OverallEfficiency { get; set; }
         public double HeatGainFactor { get; set; }
+        /// <summary>
+        /// Fan total pressure rise [Pa].
+        /// </summary>
         public double Pressure { get; set; }
+        /// <summary>
+        /// Design flow rate, expressed in the units indicated by <see cref="DesignFlowType"/>. The Mollier
+        /// bridge sets this in litres per second with <see cref="FlowRateType.Value"/>, matching Tas TPD fan
+        /// flow units (Specific Fan Power is W/(l/s)).
+        /// </summary>
         public SizedFlowValue DesignFlowRate { get; set; }
+        /// <summary>
+        /// How <see cref="DesignFlowRate"/> is expressed (e.g. an absolute value vs. a proportion of another
+        /// quantity).
+        /// </summary>
         public FlowRateType DesignFlowType { get; set; }
         public SizedFlowValue MinimumFlowRate { get; set; }
         public FlowRateType MinimumFlowType { get; set; }

@@ -1,0 +1,333 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (c) 2020–2026 Michal Dengusiak & Jakub Ziolkowski and contributors
+
+using SAM.Core.Systems;
+using System;
+using System.Collections.Generic;
+using System.Text.Json.Nodes;
+
+namespace SAM.Analytical.Systems
+{
+    /// <summary>
+    /// The generic options of a mechanical-ventilation materialisation.
+    /// <para>
+    /// <b>Only what is generic belongs here.</b> A fan's heat gain factor, whether there is heat
+    /// recovery, and what a coil is configured to do are properties of the topology template the caller
+    /// supplies - the caller loads its own template instance and sets them there. What is left is the
+    /// operating schedule, the result's name, whether the rooms carry the template prototype's in-room
+    /// components at all, and - PR5A (SAM#111 plan §C) - each physical unit's own resolved manufacturer
+    /// behaviour, which cannot live on the one shared template because two units in the same design can
+    /// carry two different selected products.
+    /// </para>
+    /// <para>
+    /// <b>Copied in and copied out.</b> Both copy paths clone the schedule and every entry of
+    /// <see cref="UnitSettings"/>, so a caller cannot reach into a materialised graph by mutating the
+    /// settings object it passed, and cannot have its own schedule or unit settings changed by anything
+    /// the materialisation does.
+    /// </para>
+    /// </summary>
+    public class MechanicalVentilationSettings : ISystemJSAMObject
+    {
+        /// <summary>
+        /// The operating schedule assigned to the materialised air-side fans, which reference it by name.
+        /// Null leaves the template's own schedule assignment untouched.
+        /// <para>
+        /// <c>ISchedule</c> rather than <c>YearlySchedule</c>: a generic materialisation is not restricted
+        /// to annual or constant schedules. What is required of whatever is supplied is that it states a
+        /// name - components reference schedules by name, so an unnamed one is unreachable - and that it
+        /// is complete and finite over the period being materialised.
+        /// </para>
+        /// </summary>
+        public ISchedule Schedule { get; set; }
+
+        /// <summary>The name given to the materialised energy centre. Null keeps the template's name.</summary>
+        public string Name { get; set; }
+
+        /// <summary>
+        /// Whether the materialised spaces carry the template prototype's in-room components - radiators,
+        /// fan coil units, chilled beams. False materialises air distribution only.
+        /// </summary>
+        public bool MaterialiseSystemSpaceComponents { get; set; }
+
+        private Dictionary<Guid, MechanicalVentilationUnitSettings> dictionary_UnitSettings = new Dictionary<Guid, MechanicalVentilationUnitSettings>();
+
+        /// <summary>
+        /// Each physical air handling unit's resolved manufacturer-aware behaviour, keyed by the
+        /// analytical <c>AirHandlingUnit.Guid</c> - PR5A (SAM#111 plan §C).
+        /// <para>
+        /// <b>All-or-nothing per materialisation call.</b> An empty dictionary (the default) materialises
+        /// exactly as PR1 did - the B0 control - and is never touched by anything below. A non-empty
+        /// dictionary has to name every air handling unit the call materialises: a unit left out would be a
+        /// partially configured graph, which <c>Create.MechanicalVentilation</c> refuses rather than
+        /// silently defaulting to parity for the units nobody mentioned. A key naming a unit the call does
+        /// not materialise is refused the same way.
+        /// </para>
+        /// </summary>
+        public IReadOnlyDictionary<Guid, MechanicalVentilationUnitSettings> UnitSettings
+        {
+            get
+            {
+                return dictionary_UnitSettings;
+            }
+            set
+            {
+                Dictionary<Guid, MechanicalVentilationUnitSettings> dictionary = new Dictionary<Guid, MechanicalVentilationUnitSettings>();
+
+                if (value != null)
+                {
+                    foreach (KeyValuePair<Guid, MechanicalVentilationUnitSettings> keyValuePair in value)
+                    {
+                        dictionary[keyValuePair.Key] = keyValuePair.Value == null ? null : new MechanicalVentilationUnitSettings(keyValuePair.Value);
+                    }
+                }
+
+                dictionary_UnitSettings = dictionary;
+            }
+        }
+
+        private Dictionary<Guid, MechanicalVentilationCoolingSettings> dictionary_CoolingSettings = new Dictionary<Guid, MechanicalVentilationCoolingSettings>();
+
+        /// <summary>
+        /// Each physical air handling unit's resolved aggregate cooling module, keyed by the analytical
+        /// <c>AirHandlingUnit.Guid</c> - PR5B (SAM#111). Materialised as an internal recirculation branch
+        /// inside the unit's own air system; see <see cref="MechanicalVentilationCoolingSettings"/>.
+        /// <para>
+        /// <b>Independent of <see cref="UnitSettings"/>, and all-or-nothing in the same way.</b> Empty (the
+        /// default) materialises exactly as before - the B0 control. A non-empty dictionary has to name
+        /// every unit the call materialises, and nothing else.
+        /// </para>
+        /// </summary>
+        public IReadOnlyDictionary<Guid, MechanicalVentilationCoolingSettings> CoolingSettings
+        {
+            get
+            {
+                return dictionary_CoolingSettings;
+            }
+            set
+            {
+                Dictionary<Guid, MechanicalVentilationCoolingSettings> dictionary = new Dictionary<Guid, MechanicalVentilationCoolingSettings>();
+
+                if (value != null)
+                {
+                    foreach (KeyValuePair<Guid, MechanicalVentilationCoolingSettings> keyValuePair in value)
+                    {
+                        dictionary[keyValuePair.Key] = keyValuePair.Value == null ? null : new MechanicalVentilationCoolingSettings(keyValuePair.Value);
+                    }
+                }
+
+                dictionary_CoolingSettings = dictionary;
+            }
+        }
+
+        private Dictionary<Guid, MechanicalVentilationGuidanceSettings> dictionary_GuidanceSettings = new Dictionary<Guid, MechanicalVentilationGuidanceSettings>();
+
+        /// <summary>
+        /// SAM#123: each physical air handling unit's selected product operated to its manufacturer's
+        /// guidance, keyed by the analytical <c>AirHandlingUnit.Guid</c> - materialised as the product's own
+        /// arrangement (MVRE exchanger plus a supply DX coil), see <see cref="MechanicalVentilationGuidanceSettings"/>.
+        /// <para>
+        /// Empty (the default) materialises exactly as before. A non-empty dictionary has to name every unit
+        /// the call materialises and nothing else, and cannot be combined with <see cref="CoolingSettings"/>
+        /// (the B4 recirculation branch) - a unit is cooled one way or the other, never both.
+        /// </para>
+        /// </summary>
+        public IReadOnlyDictionary<Guid, MechanicalVentilationGuidanceSettings> GuidanceSettings
+        {
+            get
+            {
+                return dictionary_GuidanceSettings;
+            }
+            set
+            {
+                Dictionary<Guid, MechanicalVentilationGuidanceSettings> dictionary = new Dictionary<Guid, MechanicalVentilationGuidanceSettings>();
+
+                if (value != null)
+                {
+                    foreach (KeyValuePair<Guid, MechanicalVentilationGuidanceSettings> keyValuePair in value)
+                    {
+                        dictionary[keyValuePair.Key] = keyValuePair.Value == null ? null : new MechanicalVentilationGuidanceSettings(keyValuePair.Value);
+                    }
+                }
+
+                dictionary_GuidanceSettings = dictionary;
+            }
+        }
+
+        /// <summary>
+        /// PR3B-2 (mixed Part O strategies): the topology the manufacturer-guidance units are materialised onto - the
+        /// shipped MVRE topology, whose exchanger the product's arrangement needs - while every other unit of the same
+        /// call is materialised onto the call's own template (the ordinary MV topology).
+        /// <para>
+        /// <b>Null (the default) is the legacy call, unchanged:</b> every unit on the call's template, and a non-empty
+        /// <see cref="GuidanceSettings"/> naming every unit. <b>Stated, it makes <see cref="GuidanceSettings"/> partial:</b>
+        /// a unit it names is cooled on this topology, a unit it does not name is ordinary uncooled ventilation on the
+        /// call's template. Read only - its plant room is deep-cloned before anything is taken from it.
+        /// </para>
+        /// </summary>
+        public SystemEnergyCentre GuidanceTemplate { get; set; }
+
+        public MechanicalVentilationSettings()
+        {
+
+        }
+
+        public MechanicalVentilationSettings(MechanicalVentilationSettings mechanicalVentilationSettings)
+        {
+            if (mechanicalVentilationSettings != null)
+            {
+                Schedule = Core.Query.Clone(mechanicalVentilationSettings.Schedule);
+                Name = mechanicalVentilationSettings.Name;
+                MaterialiseSystemSpaceComponents = mechanicalVentilationSettings.MaterialiseSystemSpaceComponents;
+                UnitSettings = mechanicalVentilationSettings.UnitSettings;
+                CoolingSettings = mechanicalVentilationSettings.CoolingSettings;
+                GuidanceSettings = mechanicalVentilationSettings.GuidanceSettings;
+                GuidanceTemplate = mechanicalVentilationSettings.GuidanceTemplate;
+            }
+        }
+
+        public MechanicalVentilationSettings(JsonObject jsonObject)
+        {
+            FromJsonObject(jsonObject);
+        }
+
+        public bool FromJsonObject(JsonObject jsonObject)
+        {
+            if (jsonObject == null)
+            {
+                return false;
+            }
+
+            if (jsonObject.ContainsKey("Name"))
+            {
+                Name = jsonObject["Name"]?.GetValue<string>();
+            }
+
+            if (jsonObject.ContainsKey("MaterialiseSystemSpaceComponents"))
+            {
+                MaterialiseSystemSpaceComponents = jsonObject["MaterialiseSystemSpaceComponents"]?.GetValue<bool>() ?? default;
+            }
+
+            if (jsonObject.ContainsKey("Schedule"))
+            {
+                Schedule = Core.Query.IJSAMObject<ISchedule>(jsonObject["Schedule"] as JsonObject);
+            }
+
+            if (jsonObject["UnitSettings"] is JsonObject jsonObject_UnitSettings)
+            {
+                Dictionary<Guid, MechanicalVentilationUnitSettings> dictionary = new Dictionary<Guid, MechanicalVentilationUnitSettings>();
+
+                foreach (KeyValuePair<string, JsonNode> keyValuePair in jsonObject_UnitSettings)
+                {
+                    if (Guid.TryParse(keyValuePair.Key, out Guid guid) && keyValuePair.Value is JsonObject jsonObject_Value)
+                    {
+                        dictionary[guid] = new MechanicalVentilationUnitSettings(jsonObject_Value);
+                    }
+                }
+
+                dictionary_UnitSettings = dictionary;
+            }
+
+            if (jsonObject["CoolingSettings"] is JsonObject jsonObject_CoolingSettings)
+            {
+                Dictionary<Guid, MechanicalVentilationCoolingSettings> dictionary = new Dictionary<Guid, MechanicalVentilationCoolingSettings>();
+
+                foreach (KeyValuePair<string, JsonNode> keyValuePair in jsonObject_CoolingSettings)
+                {
+                    if (Guid.TryParse(keyValuePair.Key, out Guid guid) && keyValuePair.Value is JsonObject jsonObject_Value)
+                    {
+                        dictionary[guid] = new MechanicalVentilationCoolingSettings(jsonObject_Value);
+                    }
+                }
+
+                dictionary_CoolingSettings = dictionary;
+            }
+
+            if (jsonObject["GuidanceTemplate"] is JsonObject jsonObject_GuidanceTemplate)
+            {
+                GuidanceTemplate = new SystemEnergyCentre(jsonObject_GuidanceTemplate);
+            }
+
+            if (jsonObject["GuidanceSettings"] is JsonObject jsonObject_GuidanceSettings)
+            {
+                Dictionary<Guid, MechanicalVentilationGuidanceSettings> dictionary = new Dictionary<Guid, MechanicalVentilationGuidanceSettings>();
+
+                foreach (KeyValuePair<string, JsonNode> keyValuePair in jsonObject_GuidanceSettings)
+                {
+                    if (Guid.TryParse(keyValuePair.Key, out Guid guid) && keyValuePair.Value is JsonObject jsonObject_Value)
+                    {
+                        dictionary[guid] = new MechanicalVentilationGuidanceSettings(jsonObject_Value);
+                    }
+                }
+
+                dictionary_GuidanceSettings = dictionary;
+            }
+
+            return true;
+        }
+
+        public JsonObject ToJsonObject()
+        {
+            JsonObject result = new JsonObject
+            {
+                { "_type", Core.Query.FullTypeName(this) },
+                { "MaterialiseSystemSpaceComponents", MaterialiseSystemSpaceComponents }
+            };
+
+            if (Name != null)
+            {
+                result.Add("Name", Name);
+            }
+
+            if (Schedule != null)
+            {
+                result.Add("Schedule", Schedule.ToJsonObject());
+            }
+
+            if (dictionary_UnitSettings.Count != 0)
+            {
+                JsonObject jsonObject_UnitSettings = new JsonObject();
+
+                foreach (KeyValuePair<Guid, MechanicalVentilationUnitSettings> keyValuePair in dictionary_UnitSettings)
+                {
+                    jsonObject_UnitSettings.Add(keyValuePair.Key.ToString(), keyValuePair.Value?.ToJsonObject());
+                }
+
+                result.Add("UnitSettings", jsonObject_UnitSettings);
+            }
+
+            //Omitted when empty, so a B0 settings object serializes exactly as it did before PR5B.
+            if (dictionary_CoolingSettings.Count != 0)
+            {
+                JsonObject jsonObject_CoolingSettings = new JsonObject();
+
+                foreach (KeyValuePair<Guid, MechanicalVentilationCoolingSettings> keyValuePair in dictionary_CoolingSettings)
+                {
+                    jsonObject_CoolingSettings.Add(keyValuePair.Key.ToString(), keyValuePair.Value?.ToJsonObject());
+                }
+
+                result.Add("CoolingSettings", jsonObject_CoolingSettings);
+            }
+
+            //Omitted when empty, so a B0 or B4 settings object serializes exactly as it did before.
+            if (dictionary_GuidanceSettings.Count != 0)
+            {
+                JsonObject jsonObject_GuidanceSettings = new JsonObject();
+
+                foreach (KeyValuePair<Guid, MechanicalVentilationGuidanceSettings> keyValuePair in dictionary_GuidanceSettings)
+                {
+                    jsonObject_GuidanceSettings.Add(keyValuePair.Key.ToString(), keyValuePair.Value?.ToJsonObject());
+                }
+
+                result.Add("GuidanceSettings", jsonObject_GuidanceSettings);
+            }
+
+            //Omitted when unstated, so a legacy settings object serializes exactly as it did before.
+            if (GuidanceTemplate != null)
+            {
+                result.Add("GuidanceTemplate", GuidanceTemplate.ToJsonObject());
+            }
+
+            return result;
+        }
+    }
+}

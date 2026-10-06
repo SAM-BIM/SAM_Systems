@@ -28,8 +28,12 @@ namespace SAM.Analytical.Systems
             {
                 if (yearlySchedule.values != null)
                 {
-                    int count = yearlySchedule.values.Count();
-                    for (int i = 0; i < 24; i++)
+                    //Every hour of the year, not twenty-four of them. A yearly schedule holds 8760 values;
+                    //copying only the first day left the other 8736 hours at zero - silently, so an annual
+                    //operating schedule became one day of operation and every stage downstream reported
+                    //success. The 24 was copied from ScheduleDay, where a day really is 24 hours.
+                    int count = System.Math.Min(values.Length, yearlySchedule.values.Length);
+                    for (int i = 0; i < count; i++)
                     {
                         values[i] = yearlySchedule.values[i];
                     }

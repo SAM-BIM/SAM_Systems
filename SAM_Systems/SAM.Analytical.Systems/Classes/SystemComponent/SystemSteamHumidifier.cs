@@ -9,7 +9,16 @@ namespace SAM.Analytical.Systems
 {
     public class SystemSteamHumidifier : SystemHumidifier
     {
+        /// <summary>
+        /// Humidification thermal load [W]: the enthalpy rise across the humidifier.
+        /// </summary>
         public ISizableValue Duty { get; set; }
+
+        /// <summary>
+        /// Off-humidifier relative humidity setpoint [%, 0-100]. Passes straight through to Tas TPD
+        /// (<c>Convert.ToTPD</c> maps it verbatim), whose steam humidifiers control downstream relative
+        /// humidity under their default flags.
+        /// </summary>
         public ModifiableValue Setpoint { get; set; }
         public ModifiableValue WaterSupplyTemperature { get; set; }
         public SizingType WaterTemperatureSource { get; set; }
