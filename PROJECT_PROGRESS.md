@@ -61,6 +61,16 @@ Not yet set by the owner. Record them here at the first Q4 planning pass. Known 
 - Validation: `check_source.py origin/sow/2026-Q4` OK, `check_assemblies.py` OK, local build 0 errors, relevant tests green (see the PR body); PR CI `build` success, `spdx` success; mergeable: mergeable.
 - Next: owner decides whether/when to close the old PR; merge remains the maintainer's call.
 
+## Q4 runtime-URL cleanup (2026-10-06)
+
+- **Status:** complete. SAM-BIM/SAM_Systems#38 merged into `sow/2026-Q4` as merge commit `0bda639e050494370d4243c8bb433e8a93ed0314` (PR head `ddce74694e94117a7b547d62a59c66a05ce8683b`, Q4 base `edc8d0d`); merge method: merge commit (repository convention). Remote and local `fix/sam-bim-runtime-urls-q4` removed.
+- **Work completed:** The System Results component's "source code" action (`OnSourceCodeClick`) now opens `https://github.com/SAM-BIM/SAM` instead of `https://github.com/HoareLea/SAM`. SAM-BIM is the authoritative ecosystem; HoareLea is no longer the synchronised operational source. Record: the PR's `SAM-BIM-RuntimeUrls-Q4.md` document.
+- **Decisions / owner classifications:** Assembly author/contact strings (`Hoare Lea`, `@hoarelea.com` in `Kernel/AssemblyInfo.cs`) are provenance/metadata, not repository ownership: KEEP unchanged.
+- **Files changed:** `Grasshopper/SAM.Analytical.Grasshopper.Systems/Component/SAMAnalyticalSystemResults.cs` (1 product line), `docs/SAM-BIM-RuntimeUrls-Q4.md`.
+- **Validation:** `msbuild SAM_Systems.sln -p:Configuration=Release` (APPDATA/USERPROFILE redirected): 0 errors; the `.gha` contains the SAM-BIM URL and not the HoareLea one. `SAM.Analytical.Systems.Tests` not run locally (code path untouched). PR CI build and spdx green.
+- **Unresolved issues, risks:** None introduced.
+- **Next step:** None for this change; the icon PR SAM_Systems#37 is deferred and untouched.
+
 ---
 
 # Historical record - 2026-Q3 (frozen)
