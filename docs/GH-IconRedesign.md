@@ -1,6 +1,6 @@
 # SAM Grasshopper icon redesign — SAM_Systems PR record
 
-Branch `feature/sam-gh-icon-redesign`, based on `sow/2026-Q3` @ `fbef48f`. PR: SAM-BIM/SAM_Systems#32.
+Branch `feature/sam-gh-icon-redesign-q4`, based on `sow/2026-Q4` @ `0a7a1b07`. PR: SAM-BIM/SAM_Systems#37. Q4 migration of SAM-BIM/SAM_Systems#32 (`feature/sam-gh-icon-redesign` @ `4c32610`, based on `sow/2026-Q3` @ `fbef48f`, kept open for provenance): the same commits replayed onto `sow/2026-Q4`; Q3 history was not imported.
 Propagates the SAM icon design system from SAM-BIM/SAM#166 (head `cf4d924a`, open, not merged) to this repository.
 
 ## Current status
@@ -57,7 +57,10 @@ Built and validated; ready for review. **Not merged.**
 - Building a single csproj (outside the solution) hits the pre-existing post-build `xcopy "$(SolutionDir)…"` error; building the solution is clean. Not caused by this PR.
 
 ## Recommended next step
-Review this PR (compare `review/contact_sheet.png`), then merge by the maintainer. After merge, add the `PROJECT_PROGRESS.md` closeout entry on `sow/2026-Q3` with the merge SHA. SAM#166 (the reference design system) remains open.
+Review this PR (compare `review/contact_sheet.png`), then merge by the maintainer. After merge, add the `PROJECT_PROGRESS.md` closeout entry on `sow/2026-Q4` with the merge SHA. SAM#166 (the reference design system) remains open.
 
 ## SPDX header policy (CI `spdx-check`)
 The repository SPDX check requires the LGPL-3.0-or-later SPDX line and the copyright line in every `.cs` file a PR changes. The icon-token swaps touched 10 older files that predated the policy (components, `Resources.Designer.cs`), and the kit test `IconTests.cs` had no header. The standard 2-line header was added to them; nothing else changed. `tools/check_source.py` accepts exactly this header as the only non-icon addition and compares against the merge base.
+
+## Q4 migration validation
+Re-validated on `sow/2026-Q4` @ `0a7a1b07`: `design/grasshopper-icons/tools/check_source.py origin/sow/2026-Q4` OK (icon-token swaps: 38, SPDX headers added: 8, non-icon changes: 0, ComponentGuid declarations unchanged); `dotnet build SAM_Systems.sln -c Debug` succeeded with 0 errors; `check_assemblies.py build` OK; tests: `SAM.Analytical.Systems.Tests` (CI conformance suite) 305/305 passed; `SAM.Analytical.Systems.Mollier.Tests` 123/123 passed. The Q4 feature diff (before this record commit) has the same patch-id, file set and blobs as the Q3 PR's feature diff.
