@@ -306,7 +306,7 @@ namespace SAM.Analytical.Grasshopper
 
         public virtual void OnSourceCodeClick(object sender = null, object e = null)
         {
-            Process.Start("https://github.com/HoareLea/SAM");
+            Process.Start("https://github.com/SAM-BIM/SAM");
         }
 
         public string ComponentVersion
