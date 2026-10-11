@@ -127,7 +127,7 @@ namespace SAM.Analytical.Grasshopper.Systems
     {
         public override Guid ComponentGuid => new Guid("55d4a95d-124b-4e7d-b415-f77e12b6f2dc");
 
-        protected override System.Drawing.Bitmap Icon => Resources.SAM_Small;
+        protected override System.Drawing.Bitmap Icon => Resources.SAM_GH_Object;
 
         public bool Hidden { get; set; }
 

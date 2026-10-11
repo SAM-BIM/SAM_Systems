@@ -26,7 +26,7 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// <summary>
         /// Provides an Icon for the component.
         /// </summary>
-        protected override System.Drawing.Bitmap Icon => Resources.SAM3_0;
+        protected override System.Drawing.Bitmap Icon => Resources.SAM_GH_EnergyCentreMerge;
 
         public override GH_Exposure Exposure => GH_Exposure.primary;
 

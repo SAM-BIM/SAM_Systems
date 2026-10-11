@@ -27,7 +27,7 @@ namespace SAM.Analytical.Grasshopper.Systems
         /// <summary>
         /// Provides an icon for the component.
         /// </summary>
-        protected override System.Drawing.Bitmap Icon => Resources.SAM_Small;
+        protected override System.Drawing.Bitmap Icon => Resources.SAM_GH_AirflowSet;
 
         /// <summary>
         /// Initialises a new instance of the SystemEnergyCentre.ModifyByAirflows component.

@@ -130,4 +130,106 @@
   <data name="SAM_TasTPD3" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\Resources\SAM_TasTPD3.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
   </data>
+  <data name="SAM_GH_Ahu" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_Ahu.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_AhuConvert" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_AhuConvert.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_AhuCreate" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_AhuCreate.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_AhuPluralGet" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_AhuPluralGet.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_AhuPluralSort" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_AhuPluralSort.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_AhuValue" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_AhuValue.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_AirflowSet" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_AirflowSet.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_ConnectorCreate" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_ConnectorCreate.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_ConnectorPluralCreate" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_ConnectorPluralCreate.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_EnergyCentre" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_EnergyCentre.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_EnergyCentreAdd" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_EnergyCentreAdd.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_EnergyCentreCreate" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_EnergyCentreCreate.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_EnergyCentreDisplay" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_EnergyCentreDisplay.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_EnergyCentreMerge" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_EnergyCentreMerge.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_EnergyCentreValue" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_EnergyCentreValue.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_FanLibraryImport" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_FanLibraryImport.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_FanModify" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_FanModify.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_FanUpdate" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_FanUpdate.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_Geometry2DCreate" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_Geometry2DCreate.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_Object" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_Object.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_ObjectPluralGet" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_ObjectPluralGet.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_PlantRoom" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_PlantRoom.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_PlantRoomCreate" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_PlantRoomCreate.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_ProcessHeatRecoveryCreate" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_ProcessHeatRecoveryCreate.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_RelationPluralGet" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_RelationPluralGet.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_ResultGet" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_ResultGet.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_ResultPluralGet" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_ResultPluralGet.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_SettingsCreate" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_SettingsCreate.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_Space" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_Space.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_SystemModify" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_SystemModify.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_SystemPlural" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_SystemPlural.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_SystemPluralGet" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_SystemPluralGet.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_SystemValue" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_SystemValue.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SAM_GH_ThermometerGet" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Icons\SAM_GH_ThermometerGet.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
 </root>
