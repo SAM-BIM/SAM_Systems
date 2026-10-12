@@ -1,5 +1,14 @@
 # Project Progress - SAM_Systems (2026-Q4)
 
+## Q4 agent instructions rollout closeout - 2026-10-12
+
+- SAM-BIM/SAM_Systems#39 merged as `24cafd9fd75593ee7bf0907c25c29373f646767a` (merge commit pinned to approved head `875edf667ceeb7714a3aff94627c49191a30bf4a`; base `sow/2026-Q4` `c0dc4281d87991e2cfc39d7ab4acabe76207f483`; validated content `45f180a73e3b7c4304cc80f34369fc65f27a0fa2`). Owner-authorized 2026-10-12 after an independent review (`AGENT_ROLLOUT_REVIEW_2026-10-12.md`, local to the owner's workspace, not committed).
+- Docs only: AGENTS.md, CLAUDE.md, plus the rollout record `documentation/Agent-Continuity-Rollout-Q4.md`. No product code, build, workflow, dependency pin or tool changed; this closeout is the only `PROJECT_PROGRESS.md` change.
+- Validation: local documentation checks and commands are in `documentation/Agent-Continuity-Rollout-Q4.md` (`git diff --check`, file scope, UTF-8/LF/no BOM, import). Hosted checks at the approved head: build success (run 38258108243); spdx success (run 38258108307). Dependency selection: dependency clones in the build log: SAM @ sow/2026-Q4, SAM_Mollier @ sow/2026-Q4.
+- Cleanup: remote docs/agent-instructions-rollout-q4 deleted with an expected-SHA lease on 875edf667ceeb7714a3aff94627c49191a30bf4a after confirming it is contained in sow/2026-Q4 and no open PR uses it as head or base; the local branch and its worktree are preserved (worktree in use). Other branches, worktrees and the frozen quarters were not touched.
+- Remaining gaps: no agent-client behaviour or token benchmark has been run.
+- Exact next step: Continue from the shared `AGENTS.md`. Open item carried from the pilots: verify on each installed agent client, in a fresh Q4 session, that it follows the instructions without loading the full progress history, and record the result.
+
 ## Icon migration closeout — 2026-10-11
 
 - [SAM_Systems#37](https://github.com/SAM-BIM/SAM_Systems/pull/37) merged as `3d19c3d6ec1de3b55aab234cbc4982cbaf01ec66`; owner authorized merging after green/safe validation. Feature branch preserved.
